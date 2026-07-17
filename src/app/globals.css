@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Paleta corporativa Áncora — ver CLAUDE.md sección 8 */
+    --ancora-primary: #0c8aa3;
+    --ancora-primary-dark: #086a82;
+    --ancora-primary-light: #e6f4f7;
+
+    --text-primary: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --text-tertiary: #8a8a8a;
+
+    --bg-primary: #ffffff;
+    --bg-secondary: #fafafa;
+    --bg-tertiary: #f4f4f4;
+
+    --border-default: #e0e0e0;
+    --border-strong: #d4d4d4;
+
+    --success: #2e7d32;
+    --warning: #b68900;
+    --danger: #c62828;
+    --info: #0c5a99;
+
+    /* Tokens shadcn/ui mapeados a la paleta corporativa */
+    --background: var(--bg-primary);
+    --foreground: var(--text-primary);
+
+    --card: var(--bg-primary);
+    --card-foreground: var(--text-primary);
+
+    --popover: var(--bg-primary);
+    --popover-foreground: var(--text-primary);
+
+    --primary: var(--ancora-primary);
+    --primary-foreground: #ffffff;
+
+    --secondary: var(--bg-tertiary);
+    --secondary-foreground: var(--text-primary);
+
+    --muted: var(--bg-secondary);
+    --muted-foreground: var(--text-secondary);
+
+    --accent: var(--ancora-primary-light);
+    --accent-foreground: var(--ancora-primary-dark);
+
+    --destructive: var(--danger);
+    --destructive-foreground: #ffffff;
+
+    --border: var(--border-default);
+    --input: var(--border-default);
+    --ring: var(--ancora-primary);
+
+    /* lg = 8px (tarjetas), sm = 4px (inputs) — sección 8 */
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
