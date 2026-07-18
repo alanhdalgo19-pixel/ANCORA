@@ -37,3 +37,16 @@ next-env.d.ts
 
 # supabase
 supabase/.temp
+
+# Archivos con posibles secretos
+API*.txt
+API*.md
+secrets/
+
+
+# Archivos con posibles credenciales
+API*.txt
+API*.md
+*credentials*
+*secrets*
+
