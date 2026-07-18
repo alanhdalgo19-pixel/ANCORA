@@ -622,7 +622,7 @@ Color corporativo principal: `#0c8aa3` (azul-cyan inspirado en logo Ancora).
 
 ## 10. Pendientes con Espe
 
-Lista viva de cosas pendientes de confirmar. Marcar como [RESUELTO] cuando se aclare.
+Lista viva de cosas pendientes de confirmar. Marcar como [RESUELTO] cuando se aclare. Esta lista es lo que Alan debe llevar a la próxima reunión con Esperanza.
 
 1. Estados intermedios adicionales al ciclo de vida del presupuesto.
 2. Si algún proveedor diferencia precios por color individual (no solo blanco/color/oscuro).
@@ -666,4 +666,78 @@ Lista viva de cosas pendientes de confirmar. Marcar como [RESUELTO] cuando se ac
 
 ---
 
-*Última actualización del documento: junio 2026.*
+## 12. Estado actual del proyecto
+
+Estado a fecha de la última actualización del documento.
+
+### Fase 1 — Núcleo de cotización
+
+| Componente | Estado | Notas |
+|------------|--------|-------|
+| Bootstrap (setup, dependencias, estructura) | ✅ Completado | Prompt 0 |
+| Esquema de base de datos (17 tablas) | ✅ Aplicado en Supabase | Migración inicial |
+| Datos semilla base | ✅ Cargados | Técnicas, tipos_picaje, etc. |
+| Autenticación funcional | ✅ Completado | Prompt 1 |
+| Roles (admin/operador/consulta) | ✅ Funcionando | Gate en middleware y layout |
+| Gestión de sesión | ✅ Funcionando | Cookies SSR |
+| Usuarios iniciales sembrados | ✅ 4 usuarios creados | Alan, Espe, Sonia, Mohamed |
+| Página de acceso denegado | ✅ | `/acceso-denegado` |
+| CRUD clientes | ⏳ Pendiente | Prompt 2 |
+| Panel admin (prendas, tarifas, márgenes, costes) | ⏳ Pendiente | Prompt 3-6 |
+| Wizard de presupuesto | ⏳ Pendiente | Prompt 7 |
+| Motor de cálculo por técnica | ⏳ Stubs creados en `src/lib/calculos/` | Prompt 7 |
+| Generación de PDF | ⏳ Pendiente | Prompt 10 |
+| Composición DTF | ⏳ Pendiente | Prompt 11 |
+| Histórico y filtros | ⏳ Pendiente | Prompt 9 |
+| Exportación a Excel | ⏳ Pendiente | Prompt 16 |
+
+### Usuarios sembrados en Supabase Auth y tabla `usuarios`
+
+| Nombre | Email | Rol | Notas |
+|--------|-------|-----|-------|
+| Alan Hidalgo | alan.hdalgo19@gmail.com | admin | Consultor del proyecto |
+| Esperanza | esperanza@ancora.local | admin | Email ficticio, cambiar al desplegar |
+| Sonia | sonia@ancora.local | operador | Email ficticio, cambiar al desplegar |
+| Mohamed | mohamed@ancora.local | admin | Email ficticio, cambiar al desplegar |
+
+Contraseña inicial de todos: `ancora2026`. **Cambiar antes de entregar en producción.**
+
+---
+
+## 13. ⚠️ Deuda técnica crítica pendiente
+
+### RLS (Row Level Security) NO ESTÁ ACTIVADO
+
+Durante la migración inicial se dejó RLS desactivado en todas las tablas (comentario explícito en `supabase/migrations/20260717000000_initial_schema.sql`: "pendiente de diseño en la fase de autenticación"). 
+
+**Riesgo:** cualquier persona con la clave `anon` (que va embebida en el JavaScript del navegador y es pública por diseño) puede leer y escribir en cualquier tabla sin restricciones.
+
+**Antes de que Ancora use el sistema en producción**, hay que:
+1. Activar RLS en todas las tablas: `usuarios`, `clientes`, `prendas`, `precios_prenda`, `tecnicas`, `tipos_picaje`, `parametros_dtf`, `parametros_bordado`, `tarifas_serigrafia`, `parametros_serigrafia`, `parametros_impresion_directa`, `parametros_sublimacion`, `tramos_margen`, `costes_operativos`, `presupuestos`, `lineas_presupuesto`, `proveedores`.
+2. Definir políticas por rol:
+   - `admin`: acceso total a todas las tablas.
+   - `operador`: SELECT en todas las tablas de configuración, INSERT/SELECT/UPDATE en presupuestos, lineas_presupuesto, clientes.
+   - `consulta`: SELECT únicamente.
+3. Mover la lógica de verificación de usuario en login (que hoy usa la clave anónima antes del signIn) a usar `service_role` con Server Action.
+
+**Esta tarea es la primera del próximo prompt (Prompt 2).**
+
+---
+
+## 14. Decisiones tomadas durante el desarrollo
+
+Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts secuenciales que no estaban en la especificación original. Se documentan aquí para trazabilidad y para que futuras sesiones las respeten.
+
+### Prompt 1 — Autenticación y usuarios
+
+1. **Verificación de usuario activo movida al middleware, no al layout.** Un Server Component no puede escribir cookies, así que un `signOut()` disparado desde `(app)/layout.tsx` no limpiaría realmente la cookie de sesión (se produciría un bucle de redirección con el middleware). La comprobación de "existe en usuarios y está activo" vive en `src/lib/supabase/middleware.ts`. El layout mantiene una comprobación defensiva de solo lectura.
+
+2. **La comprobación previa de "email no registrado" usa la clave anónima** temporalmente, aprovechando que RLS está desactivado en todas las tablas. Cuando se active RLS (deuda técnica sección 13), este pre-check dejará de funcionar para usuarios anónimos y habrá que moverlo a un Server Action con la clave `service_role`.
+
+3. **`scripts/seed_users.mjs` usa `fetch` directo contra la API de Supabase** (Auth Admin + REST) en lugar del SDK `@supabase/supabase-js`. El SDK inicializa un `RealtimeClient` que en Node 20 sin el paquete `ws` lanza `Error: Node.js 20 detected without native WebSocket support` y aborta el script. Se evita añadir `ws` como dependencia nueva; el script no necesita Realtime.
+
+4. **Se creó `.claude/launch.json`** para poder previsualizar `npm run dev` desde el navegador integrado de Claude Code. Es tooling de desarrollo, no afecta a la aplicación en producción.
+
+---
+
+*Última actualización del documento: julio 2026 tras cierre de Prompt 1.*
