@@ -682,7 +682,9 @@ Estado a fecha de la última actualización del documento.
 | Gestión de sesión | ✅ Funcionando | Cookies SSR |
 | Usuarios iniciales sembrados | ✅ 4 usuarios creados | Alan, Espe, Sonia, Mohamed |
 | Página de acceso denegado | ✅ | `/acceso-denegado` |
-| CRUD clientes | ⏳ Pendiente | Prompt 2 |
+| RLS activado en todas las tablas | ✅ Completado | Prompt 2 |
+| CRUD clientes | ✅ Completado | Prompt 2 |
+| Semilla de 5 clientes reales | ✅ Cargados | Prompt 2 |
 | Panel admin (prendas, tarifas, márgenes, costes) | ⏳ Pendiente | Prompt 3-6 |
 | Wizard de presupuesto | ⏳ Pendiente | Prompt 7 |
 | Motor de cálculo por técnica | ⏳ Stubs creados en `src/lib/calculos/` | Prompt 7 |
@@ -704,23 +706,34 @@ Contraseña inicial de todos: `ancora2026`. **Cambiar antes de entregar en produ
 
 ---
 
-## 13. ⚠️ Deuda técnica crítica pendiente
+## 13. Deuda técnica
 
-### RLS (Row Level Security) NO ESTÁ ACTIVADO
+### 13.1. [RESUELTO en Prompt 2] Row Level Security
 
-Durante la migración inicial se dejó RLS desactivado en todas las tablas (comentario explícito en `supabase/migrations/20260717000000_initial_schema.sql`: "pendiente de diseño en la fase de autenticación"). 
+RLS estaba desactivado en todas las tablas al terminar el bootstrap. **Se activó completamente durante el Prompt 2** con la migración `supabase/migrations/20260718000000_enable_rls.sql`.
 
-**Riesgo:** cualquier persona con la clave `anon` (que va embebida en el JavaScript del navegador y es pública por diseño) puede leer y escribir en cualquier tabla sin restricciones.
+Detalles de la implementación:
+- Función de utilidad `public.get_user_rol()` con `SECURITY DEFINER` para evitar recursión al aplicar políticas sobre `usuarios`.
+- Políticas por rol (`admin`, `operador`, `consulta`) aplicadas a las 17 tablas.
+- Las políticas de las 13 tablas de configuración se generan con un bucle `DO $$ ... FOREACH ...` para reducir el riesgo de desalineación entre bloques.
+- Nueva utilidad servidor `src/lib/supabase/admin.ts` que crea un cliente con `SUPABASE_SERVICE_ROLE_KEY` para operaciones que necesitan saltarse RLS (pre-check de email en login).
+- El pre-check de "email no registrado" en `src/lib/supabase/actions.ts` ahora usa el cliente admin en vez de la clave anónima.
 
-**Antes de que Ancora use el sistema en producción**, hay que:
-1. Activar RLS en todas las tablas: `usuarios`, `clientes`, `prendas`, `precios_prenda`, `tecnicas`, `tipos_picaje`, `parametros_dtf`, `parametros_bordado`, `tarifas_serigrafia`, `parametros_serigrafia`, `parametros_impresion_directa`, `parametros_sublimacion`, `tramos_margen`, `costes_operativos`, `presupuestos`, `lineas_presupuesto`, `proveedores`.
-2. Definir políticas por rol:
-   - `admin`: acceso total a todas las tablas.
-   - `operador`: SELECT en todas las tablas de configuración, INSERT/SELECT/UPDATE en presupuestos, lineas_presupuesto, clientes.
-   - `consulta`: SELECT únicamente.
-3. Mover la lógica de verificación de usuario en login (que hoy usa la clave anónima antes del signIn) a usar `service_role` con Server Action.
+### 13.2. ⚠️ Operador puede desactivar clientes vía UPDATE (defensa en Server Action)
 
-**Esta tarea es la primera del próximo prompt (Prompt 2).**
+Sonia (rol operador) tiene permiso RLS de UPDATE completo sobre `clientes` (para editar teléfono, dirección, etc.). Técnicamente esto le permitiría enviar un UPDATE que ponga `activo = false` (soft delete), aunque el botón "Desactivar" no aparezca en su interfaz.
+
+**Protección actual:** la Server Action `desactivarCliente` verifica el rol antes de ejecutar el UPDATE. Si un operador logra invocarla, devuelve error de autorización.
+
+**Solución futura (Prompt de Fase 3):** añadir una política RLS más fina que impida al operador cambiar específicamente la columna `activo` (por ejemplo con un trigger que compare `NEW.activo` y `OLD.activo`, o dividiendo la política de UPDATE por columnas). Defensa en profundidad.
+
+### 13.3. Tabla `colores` mencionada en documentación pero no existe
+
+El `CLAUDE.md` original mencionaba en la sección 6.1 una tabla `colores`, pero **nunca se creó** en la migración inicial y no aparece en `types/database.ts`. El listado real es de 17 tablas.
+
+**Estado actual:** el "color" de una prenda se guarda como texto libre en `lineas_presupuesto.color` (campo `text`). No hay paleta cerrada.
+
+**Decisión pendiente:** valorar si se necesita una tabla `colores` con paleta cerrada (útil para consistencia y para filtros en catálogo) o si el texto libre es suficiente. Preguntar a Espe cuando sea relevante.
 
 ---
 
@@ -738,6 +751,18 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 
 4. **Se creó `.claude/launch.json`** para poder previsualizar `npm run dev` desde el navegador integrado de Claude Code. Es tooling de desarrollo, no afecta a la aplicación en producción.
 
+### Prompt 2 — RLS y CRUD de clientes
+
+1. **Tabla `colores` mencionada en la especificación pero no existe.** Se omitió de la migración RLS por no estar en el esquema real. Ver sección 13.3 para decisión futura.
+
+2. **Políticas RLS de las 13 tablas de configuración generadas con bucle PL/pgSQL.** En lugar de escribir 26 bloques `CREATE POLICY` repetidos (uno para admin y otro para operador/consulta por cada tabla), se usa un `DO $$ ... FOREACH ...` que itera sobre el listado. Ventaja: menos código, menos riesgo de que alguna quede desalineada; una modificación futura de las reglas se hace en un solo sitio.
+
+3. **RLS no impide UPDATE de `activo=false` por operador; la protección vive en la Server Action.** Sonia (operador) tiene UPDATE completo sobre `clientes` por RLS. La verificación de rol para desactivar clientes está en `desactivarCliente` (Server Action), no en la política SQL. Documentado como deuda técnica menor en sección 13.2.
+
+4. **Campo "Móvil" del seed de clientes guardado en `telefono`.** El esquema tiene un único campo `telefono` (no distingue fijo/móvil). Los datos originales de los presupuestos históricos usaban "Móvil: XXX" — se copiaron directamente al campo `telefono` sin distinguir tipo.
+
+5. **Provincia por defecto en `"Illes Balears"`.** Tanto en el seed como en el valor por defecto del formulario de alta. Ancora está en Baleares y la mayoría de clientes son isleños.
+
 ---
 
-*Última actualización del documento: julio 2026 tras cierre de Prompt 1.*
+*Última actualización del documento: julio 2026 tras cierre de Prompt 2.*
