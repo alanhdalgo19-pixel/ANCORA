@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed:users": "node scripts/seed_users.mjs"
+    "seed:users": "node scripts/seed_users.mjs",
+    "seed:clientes": "node scripts/seed_clientes.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 interface LoginInput {
   email: string;
@@ -17,15 +18,21 @@ interface LoginResult {
  * `usuarios` (la lista real de usuarios del sistema) ANTES de intentar
  * autenticar contra Supabase Auth, que por diseño nunca distingue "email
  * inexistente" de "contraseña incorrecta" en signInWithPassword.
+ *
+ * Con RLS activado (CLAUDE.md sección 13) esta consulta ya no puede hacerse
+ * con la clave anónima: un usuario sin sesión no tiene fila en `usuarios`
+ * desde la que resolver get_user_rol(), así que ninguna política le
+ * dejaría ver nada. Se usa el cliente admin (service_role) para este único
+ * pre-check, que se ejecuta siempre en servidor.
  */
 export async function login({
   email,
   password,
 }: LoginInput): Promise<LoginResult | void> {
   const emailNormalizado = email.trim().toLowerCase();
-  const supabase = createClient();
+  const supabaseAdmin = createAdminClient();
 
-  const { data: usuario } = await supabase
+  const { data: usuario } = await supabaseAdmin
     .from("usuarios")
     .select("activo")
     .eq("email", emailNormalizado)
@@ -39,6 +46,7 @@ export async function login({
     return { error: "Usuario desactivado, contacta con el administrador" };
   }
 
+  const supabase = createClient();
   const { error } = await supabase.auth.signInWithPassword({
     email: emailNormalizado,
     password,

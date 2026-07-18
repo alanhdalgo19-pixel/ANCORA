@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronDown, LogOut } from "lucide-react";
 import { signOut } from "@/lib/supabase/actions";
 import {
@@ -16,14 +17,25 @@ interface TopbarProps {
 export function Topbar({ nombre }: TopbarProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-background px-6">
-      <div className="flex items-center gap-2">
-        <span
-          className="h-8 w-8 rounded-full bg-ancora-primary"
-          aria-hidden="true"
-        />
-        <span className="text-base font-semibold text-foreground">
-          Áncora
-        </span>
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <span
+            className="h-8 w-8 rounded-full bg-ancora-primary"
+            aria-hidden="true"
+          />
+          <span className="text-base font-semibold text-foreground">
+            Áncora
+          </span>
+        </div>
+
+        <nav className="flex items-center gap-4">
+          <Link
+            href="/clientes"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            Clientes
+          </Link>
+        </nav>
       </div>
 
       <DropdownMenu>
