@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { Topbar } from "@/components/shared/Topbar";
 
 export default async function AppLayout({
   children,
@@ -15,5 +16,23 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  return <div className="min-h-screen bg-background">{children}</div>;
+  const { data: usuario } = await supabase
+    .from("usuarios")
+    .select("nombre, activo")
+    .eq("id", user.id)
+    .single();
+
+  // El middleware ya cierra sesión y redirige a los usuarios inexistentes o
+  // desactivados (es el único sitio donde se puede limpiar la cookie); esto
+  // es una salvaguarda defensiva por si se llega aquí de otro modo.
+  if (!usuario || !usuario.activo) {
+    redirect("/login");
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Topbar nombre={usuario.nombre} />
+      <main>{children}</main>
+    </div>
+  );
 }

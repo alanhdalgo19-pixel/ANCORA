@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { Rol } from "@/types/database";
 
 export function createClient() {
   const cookieStore = cookies();
@@ -24,4 +25,24 @@ export function createClient() {
       },
     },
   );
+}
+
+/** Rol del usuario autenticado actual, o null si no hay sesión o no consta en `usuarios`. */
+export async function getUserRole(): Promise<Rol | null> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const { data: usuario } = await supabase
+    .from("usuarios")
+    .select("rol")
+    .eq("id", user.id)
+    .single();
+
+  return usuario?.rol ?? null;
 }
