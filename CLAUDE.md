@@ -685,13 +685,23 @@ Estado a fecha de la última actualización del documento.
 | RLS activado en todas las tablas | ✅ Completado | Prompt 2 |
 | CRUD clientes | ✅ Completado | Prompt 2 |
 | Semilla de 5 clientes reales | ✅ Cargados | Prompt 2 |
-| Panel admin (prendas, tarifas, márgenes, costes) | ⏳ Pendiente | Prompt 3-6 |
-| Wizard de presupuesto | ⏳ Pendiente | Prompt 7 |
-| Motor de cálculo por técnica | ⏳ Stubs creados en `src/lib/calculos/` | Prompt 7 |
-| Generación de PDF | ⏳ Pendiente | Prompt 10 |
-| Composición DTF | ⏳ Pendiente | Prompt 11 |
+| Panel admin (dashboard + sidebar) | ✅ Completado | Prompt 3 |
+| Panel admin: parámetros DTF | ✅ Completado | Prompt 3 |
+| Panel admin: parámetros bordado | ✅ Completado | Prompt 3 |
+| Panel admin: tarifas serigrafía (esporádico + habitual) | ✅ Completado | Prompt 3 |
+| Panel admin: impresión directa | ✅ Completado | Prompt 3 |
+| Panel admin: sublimación (con PTE) | ✅ Completado | Prompt 3 |
+| Panel admin: tipos de picaje | ✅ Completado | Prompt 3 |
+| Panel admin: márgenes provisionales | ✅ Completado | Prompt 3 |
+| Panel admin: costes operativos | ✅ Completado | Prompt 3 |
+| Panel admin: CRUD proveedores | ✅ Completado | Prompt 3 |
+| Panel admin: catálogo de prendas + matriz de precios | ✅ Completado | Prompt 3 |
+| Wizard de presupuesto | ⏳ Pendiente | Prompt 4-5 |
+| Motor de cálculo por técnica | ⏳ Stubs creados en `src/lib/calculos/` | Prompt 4 |
+| Generación de PDF | ⏳ Pendiente | Prompt 6-7 |
+| Composición DTF | ⏳ Pendiente | Prompt 8 |
 | Histórico y filtros | ⏳ Pendiente | Prompt 9 |
-| Exportación a Excel | ⏳ Pendiente | Prompt 16 |
+| Exportación a Excel | ⏳ Pendiente | Prompt 10 |
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
@@ -763,6 +773,24 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 
 5. **Provincia por defecto en `"Illes Balears"`.** Tanto en el seed como en el valor por defecto del formulario de alta. Ancora está en Baleares y la mayoría de clientes son isleños.
 
+### Prompt 3 — Panel de administración completo
+
+1. **Tablas editables (serigrafía, márgenes, precios de prenda) usan formulario único con todas las celdas visibles**, no edición celda a celda ni modales. Ventaja: Espe puede meter muchos precios de golpe sin abrir/cerrar diálogos. Guardado en bloque con Server Action única.
+
+2. **Preview de cálculo DTF en el formulario admin es una función local del propio componente**, no importa desde `src/lib/calculos/dtf.ts`. Buena separación: el motor de cálculo real es del Prompt 4 (implementación de funciones puras testeables). Cuando el motor real esté hecho, la preview del admin puede migrar a usarlo.
+
+3. **Sin dependencias nuevas — checkboxes nativos en vez de Radix Switch/Checkbox.** Reduce peso del bundle y evita añadir complejidad de shadcn/ui donde no aporta valor.
+
+4. **Sin toasts — se mantuvo el patrón inline "Guardado ✓" / error en texto**, igual que `ClienteForm.tsx` del Prompt 2. Coherencia visual con el resto de la app.
+
+5. **Proveedores y prendas NO llevan guard extra de rol en Server Actions** (como sí tiene `desactivarCliente` del Prompt 2), porque RLS ya restringe esas 13 tablas de configuración a admin, y toda la subruta `/admin/*` está gateada en el middleware. Evita sobreingeniería.
+
+6. **El seed de admin patchea proveedores incompletos.** Fruit, Clique y Kariban existían en la migración inicial con campos `tipo` y `dias_entrega` incompletos o vacíos. El seed los completa con los valores correctos: Fruit (precio, 3), Clique (calidad, 3), Kariban (calidad, 4).
+
+7. **Uso de "plan mode" de Claude Code para este prompt.** Dado el volumen (12 páginas + 380+ inserts + 3894 líneas añadidas), Claude Code creó primero un plan detallado en `.claude/plans/tingly-coalescing-seal.md` que fue aprobado antes de ejecutar la implementación. Buen patrón para prompts complejos.
+
+8. **Dos bugs detectados y corregidos durante la implementación**: (a) error de iteración TypeScript en la generación de la matriz de precios de prenda; (b) bug en la lógica de "prendas sin precios" que contaba mal las prendas cuando todos los precios eran 0.00. Ambos resueltos antes de commit final.
+
 ---
 
-*Última actualización del documento: julio 2026 tras cierre de Prompt 2.*
+*Última actualización del documento: julio 2026 tras cierre de Prompt 3.*
