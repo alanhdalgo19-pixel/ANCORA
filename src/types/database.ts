@@ -104,6 +104,7 @@ export interface PrecioPrenda {
 }
 
 export interface ParametrosDtf {
+  id: number;
   ancho_rollo_cm: number;
   precio_metro: number;
   recorte_por_logo: number;
@@ -116,6 +117,7 @@ export interface ParametrosDtf {
 }
 
 export interface ParametrosBordado {
+  id: number;
   precio_tarifa_1: number;
   precio_tarifa_2: number;
   precio_tarifa_3: number;
@@ -136,6 +138,7 @@ export interface TarifaSerigrafia {
 }
 
 export interface ParametrosSerigrafia {
+  id: number;
   recargo_oscura_pecho_por_color: number;
   recargo_oscura_espalda_por_color: number;
   fotolito_pecho: number;
@@ -146,12 +149,14 @@ export interface ParametrosSerigrafia {
 }
 
 export interface ParametrosImpresionDirecta {
+  id: number;
   usa_tarifa_serigrafia: boolean;
   solo_algodon: boolean;
   minimo_trabajo: number;
 }
 
 export interface ParametrosSublimacion {
+  id: number;
   precio_unitario_base: number | null;
   cantidad_minima: number | null;
   tasa_merma_pct: number | null;

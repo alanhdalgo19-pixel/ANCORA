@@ -9,12 +9,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { Rol } from "@/types/database";
 
 interface TopbarProps {
   nombre: string;
+  rol: Rol;
 }
 
-export function Topbar({ nombre }: TopbarProps) {
+export function Topbar({ nombre, rol }: TopbarProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-background px-6">
       <div className="flex items-center gap-6">
@@ -35,6 +37,14 @@ export function Topbar({ nombre }: TopbarProps) {
           >
             Clientes
           </Link>
+          {rol === "admin" && (
+            <Link
+              href="/admin"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Admin
+            </Link>
+          )}
         </nav>
       </div>
 

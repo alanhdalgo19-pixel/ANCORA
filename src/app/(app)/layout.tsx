@@ -18,7 +18,7 @@ export default async function AppLayout({
 
   const { data: usuario } = await supabase
     .from("usuarios")
-    .select("nombre, activo")
+    .select("nombre, activo, rol")
     .eq("id", user.id)
     .single();
 
@@ -31,7 +31,7 @@ export default async function AppLayout({
 
   return (
     <div className="min-h-screen bg-background">
-      <Topbar nombre={usuario.nombre} />
+      <Topbar nombre={usuario.nombre} rol={usuario.rol} />
       <main>{children}</main>
     </div>
   );
