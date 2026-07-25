@@ -697,9 +697,9 @@ Estado a fecha de la última actualización del documento.
 | Panel admin: CRUD proveedores | ✅ Completado | Prompt 3 |
 | Panel admin: catálogo de prendas + matriz de precios | ✅ Completado | Prompt 3 |
 | Motor de cálculo por técnica | ✅ Completado con 145 tests | Prompt 4 |
-| Tests automáticos (Vitest) | ✅ 145/145 passing | Prompt 4 |
+| Tests automáticos (Vitest) | ✅ 208/208 passing | Prompt 4-5 |
+| Composición DTF (bin packing múltiples logos) | ✅ Completado con 63 tests | Prompt 5 |
 | Wizard de presupuesto | ⏳ Pendiente | Prompt 6 |
-| Bin packing DTF (composición múltiples logos) | ⏳ Pendiente | Prompt 5 |
 | Generación de PDF | ⏳ Pendiente | Prompt 7 |
 | Histórico y filtros | ⏳ Pendiente | Prompt 8 |
 | Exportación a Excel | ⏳ Pendiente | Prompt 9 |
@@ -758,7 +758,7 @@ El `CLAUDE.md` original mencionaba en la sección 6.1 una tabla `colores`, pero 
 
 Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicional. Por defecto el sistema factura como Ancora factura hoy.
 
-**Nota: [APLICADO en Patch 4A].** Los 32 tramos afectados (4 técnicas × 4 tramos × 2 tipos de cliente) están a 0% en Supabase. Aplicado con `scripts/patch_margenes.mjs` (`npm run patch:margenes`, idempotente) y reflejado también en `MARGENES_POR_TECNICA` de `scripts/seed_admin_data.mjs` para que un entorno nuevo nazca ya con los valores correctos. DTF conserva 60/50/40/30.
+**Nota:** este ajuste de los valores por defecto se hará en un mini-prompt de patch posterior al Prompt 4.
 
 ### 13.5. Node.js 20 será deprecado por @supabase/supabase-js
 
@@ -847,7 +847,7 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 
 9. **Sublimación bloquea con `precio_unitario_base = 0` (estado semilla actual)**, con mensaje que apunta al panel admin: "Tarifa de sublimación pendiente de configurar (PTE TARIFA ESPE)".
 
-10. **Márgenes provisionales ajustados: A3.** Los tramos de margen se mantienen en la arquitectura, pero los valores por defecto de bordado, serigrafía, impresión directa y sublimación pasan a 0%. Solo DTF conserva 60/50/40/30. Ver sección 13.4 para el razonamiento completo. **[APLICADO en Patch 4A].**
+10. **Márgenes provisionales ajustados: A3.** Los tramos de margen se mantienen en la arquitectura, pero los valores por defecto de bordado, serigrafía, impresión directa y sublimación pasan a 0%. Solo DTF conserva 60/50/40/30. Ver sección 13.4 para el razonamiento completo. **Este ajuste se aplicará en un mini-prompt de patch tras cerrar Prompt 4.**
 
 **Nota adicional:** los stubs de Prompt 0 (`calculateDtfPrice`, etc.) se han sustituido; no tenían ningún consumidor en la app.
 
@@ -859,18 +859,44 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 - `impresion-directa.test.ts`: 13 tests
 - `sublimacion.test.ts`: 14 tests
 
+### Patch 4A — Ajuste de márgenes provisionales
+
+Aplicado inmediatamente tras Prompt 4. Actualizó 32 filas de `tramos_margen` (4 técnicas × 4 tramos × 2 tipos de cliente) poniendo el `margen_pct` a 0 para BORDADO, SERIGRAFIA, IMPRESION_DIRECTA y SUBLIMACION. DTF conserva 60/50/40/30. Se implementó como script Node (idempotente) en lugar de migración SQL para consistencia con los otros seeds. También parchea `seed_admin_data.mjs` para evitar reintroducción de valores viejos si alguien re-ejecuta el seed. Ver sección 13.4 marcada como [APLICADO en Patch 4A].
+
+### Prompt 5 — Composición DTF (bin packing múltiples logos)
+
+**Hallazgos revelados por los tests:**
+
+1. **Test 2 (caso Doyle) no puede bajar de 3 metros — es físicamente imposible.** Un logo de 25 cm de ancho entra solo uno por fila en un rollo de 35 cm, así que 20 espaldas de 25×30 consumen 6.10 m por sí solos. El óptimo teórico absoluto (18.600 cm² de logos ÷ 35 cm de ancho) es 5.31 m. El algoritmo produce 7.64 m con 69.6% de eficiencia. La estimación original del prompt (< 3 metros) era matemáticamente imposible; se corrigió el test al valor real con razonamiento comentado.
+
+2. **Test 8 (caso Josefa): precio medio es 1.06 €, no ≤ 1 €.** El rango histórico 0.30-1.00 € viene de logos de pecho sueltos; aquí 20 de las 123 unidades son espaldas de 20×25 (500 cm², quince veces el área de un pecho) y tiran de la media. Banda comercial plausible: 0.30-1.50 €.
+
+**Layouts observados en tests reales:**
+
+| Caso | Unidades | Metros | Estanterías | Eficiencia | Filas mixtas |
+|------|----------|--------|-------------|------------|--------------|
+| Doyle (9×4 ×100 + 25×30 ×20) | 120 | 7.64 m | 54 | 69.6% | 0 |
+| Josefa (8×4 ×100 + 20×25 ×20 + 5×3 ×3) | 123 | 6.01 m | 40 | 63.0% | 20 |
+
+En el caso Josefa el hueco lateral de cada fila de espalda (14 cm libres tras un logo de 20 cm) se rellena con un logo de pecho y una etiqueta — **exactamente lo que hace Josefa a mano en Corel**. En Doyle no ocurre: la fila de 25 cm deja 9.0 cm y un logo de 9 cm necesita 9.5 con su margen; se queda a 5 mm.
+
+**Decisiones técnicas de implementación:**
+
+1. **La orientación óptima minimiza la altura, NO el ancho.** El enunciado del prompt decía "si ancho_cm > alto_cm, rotarlo" pero contradecía sus propios tests (5×20 → 20×5). La regla correcta: se rota cuando `alto > ancho`, dejando la dimensión mayor en horizontal, porque el rollo se paga por metro lineal. Logos cuadrados no se rotan (por estabilidad del layout).
+
+2. **`detalle_calculo` usa tipo propio `ComposicionSnapshot`**, no `Record<string, unknown>`. El enunciado lo declaraba genérico, pero la decisión 6 del Prompt 4 fijó snapshots tipados. Tampoco reutiliza `DetalleCalculo`: la composición añade dos bloques (`composicion`, `layout`), su comercial no tiene unitario ni extras, y `"DTF_COMPOSICION"` no es un `CodigoTecnica` del esquema — es un modo dentro de DTF.
+
+3. **El snapshot añade `altura_consumida_cm`.** Sin el alto real en cm no se puede dibujar el layout ni auditar la eficiencia (`metros_necesarios` va redondeado a 2 decimales). Es el dato que necesitará la visualización del Prompt 6 (o futura fase 2).
+
+4. **`componerDTF` emite 3 tipos de warnings no bloqueantes:**
+   - Eficiencia < 60% (composición muy ineficiente, revisar tamaños)
+   - Logo no rotable que ahorraría rollo tumbado (avisa de decisión potencialmente subóptima)
+   - Última fila por debajo del 50% de ocupación (subóptimo pero inevitable en algunos casos)
+
+**Cobertura de tests:** 63 tests nuevos en `composicion-dtf.test.ts`, superando el mínimo de 15 requerido. Cobertura de: casos básicos (1/2/3 tamaños), errores explícitos, casos reales de Ancora (Doyle, Josefa), tests de propiedad (no solapamiento, todo cabe en el rollo, determinismo), tests de eficiencia. Total del proyecto: **208/208 passing**.
+
+**Sin cambios en `calcularDTF` ni en sus 36 tests.** `componerDTF` es una función completamente independiente. La integración de ambas la resolverá el wizard en el Prompt 6.
+
 ---
 
-### Patch 4A — Márgenes provisionales a 0% (decisión A3)
-
-1. **Se aplicó por script Node (Opción B), no por migración SQL.** El proyecto no tiene el CLI de Supabase instalado ni `supabase/config.toml`, así que `supabase db push` no era posible; y `tramos_margen` nunca se sembró desde `supabase/seed.sql` (ese fichero lo excluye explícitamente) sino desde `scripts/seed_admin_data.mjs`. Añadir una migración SQL habría creado un fichero que nadie ejecuta y que duplicaría la fuente de verdad de esos datos. El patch vive donde ya vivían los datos: en los scripts.
-
-2. **Doble cambio para que el patch no se revierta solo.** `scripts/patch_margenes.mjs` (`npm run patch:margenes`) corrige la base de datos actual; `MARGENES_POR_TECNICA` en `scripts/seed_admin_data.mjs` pasa a `[0,0,0,0]` para las 4 técnicas afectadas, de modo que un entorno nuevo nazca correcto. Sin lo segundo, un `npm run seed:admin` sobre una base limpia habría vuelto a meter los valores viejos.
-
-3. **El script es idempotente por filtro, no por reintento.** Solo hace PATCH sobre las filas con `margen_pct=neq.0`, así que una segunda ejecución no toca nada y el recuento del log refleja el cambio real. Verificado ejecutándolo dos veces: 32 filas la primera, 0 la segunda.
-
-4. **Motor de cálculo y tests intactos.** Los tests inyectan los tramos de margen como parámetro, no los leen de Supabase, así que siguen en 145/145 sin tocar una línea.
-
----
-
-*Última actualización del documento: julio 2026 tras aplicar el Patch 4A.*
+*Última actualización del documento: julio 2026 tras cierre de Prompt 5.*
