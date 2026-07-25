@@ -70,6 +70,152 @@ export interface DetalleCalculo<
   comercial: SnapshotComercial;
 }
 
+// ---------------------------------------------------------------------------
+// Composición DTF (bin packing 2D de varios logos en el mismo rollo).
+// Ver `composicion-dtf.ts`. Es un módulo independiente de `calcularDTF`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Input de un logo individual en la composición DTF.
+ * Cada logo puede repetirse `cantidad` veces en el rollo.
+ */
+export interface LogoInput {
+  /** Identificador único dentro de la composición; se referencia en el layout. */
+  id: string;
+  /** Opcional, para trazabilidad ("Doyle Náutica pecho"). */
+  nombre?: string;
+  /** Ancho del logo tal como se estampará. */
+  ancho_cm: number;
+  /** Alto del logo tal como se estampará. */
+  alto_cm: number;
+  /** Cuántas veces se estampa este logo. */
+  cantidad: number;
+  /** Si es `true`, el algoritmo puede colocarlo rotado 90°. */
+  rotable: boolean;
+}
+
+/**
+ * Configuración de la composición DTF. Coincide campo a campo con `DtfConfig`
+ * pero se declara aparte para que el cálculo simple y el compuesto puedan
+ * evolucionar por separado.
+ */
+export interface DtfComposicionConfig {
+  ancho_rollo_cm: number;
+  precio_metro: number;
+  recorte_por_logo: number;
+  mano_obra_por_minuto: number;
+  preparacion_pct: number;
+  minimo_trabajo: number;
+  margen_seguridad_cm: number;
+  minutos_setup_fijo: number;
+  minutos_por_logo: number;
+  /** Tramos ya filtrados por técnica DTF y tipo de cliente. */
+  tramos_margen: TramoMargen[];
+}
+
+/**
+ * Posición final de un logo dentro del rollo.
+ * (0, 0) es la esquina superior izquierda. El eje Y crece hacia abajo: el
+ * rollo se va "consumiendo" a lo largo.
+ */
+export interface LogoColocado {
+  /** Referencia al `LogoInput.id` original. */
+  logo_id: string;
+  nombre?: string;
+  x_cm: number;
+  /** Distancia desde el inicio del rollo. */
+  y_cm: number;
+  /** Ancho aplicado: el original o el rotado. */
+  ancho_cm: number;
+  /** Alto aplicado: el original o el rotado. */
+  alto_cm: number;
+  rotado: boolean;
+}
+
+/** Bloque `composicion` del snapshot: cómo se resolvió el empaquetado. */
+export interface SnapshotComposicion {
+  algoritmo: "shelf_ffd";
+  num_estanterias: number;
+  metros_necesarios: number;
+  eficiencia_pct: number;
+  altura_consumida_cm: number;
+}
+
+/** Bloque `calculo` del snapshot de composición. */
+export interface ComposicionDetalleCalculo {
+  material: number;
+  recorte: number;
+  minutos_estimados: number;
+  mano_obra: number;
+  subtotal_sin_preparacion: number;
+  preparacion: number;
+  coste_interno: number;
+  aplicado_minimo: boolean;
+}
+
+/** Bloque `comercial` del snapshot de composición. */
+export interface SnapshotComercialComposicion {
+  tramo_cantidad: string;
+  margen_pct: number;
+  precio_total: number;
+  precio_promedio_por_logo: number;
+}
+
+/**
+ * Snapshot inmutable de la composición, para
+ * `lineas_presupuesto.detalle_calculo`.
+ *
+ * No reutiliza `DetalleCalculo` porque la composición añade dos bloques
+ * propios (`composicion` y `layout`), su `comercial` no tiene unitario ni
+ * extras, y su `tecnica` ("DTF_COMPOSICION") no es un `CodigoTecnica` del
+ * esquema: es un modo de cálculo dentro de la técnica DTF.
+ */
+export interface ComposicionSnapshot {
+  tecnica: "DTF_COMPOSICION";
+  version_calculo: string;
+  inputs: {
+    logos: LogoInput[];
+    cantidad_total: number;
+  };
+  parametros_aplicados: Record<string, number>;
+  composicion: SnapshotComposicion;
+  calculo: ComposicionDetalleCalculo;
+  comercial: SnapshotComercialComposicion;
+  layout: LogoColocado[];
+}
+
+/** Resultado de la composición DTF. */
+export interface ComposicionResultado {
+  /** Suma de las cantidades de todos los logos. */
+  cantidad_total_logos: number;
+  /** Metros de rollo consumidos. */
+  metros_necesarios: number;
+  /** Porcentaje del área del rollo realmente aprovechada. */
+  eficiencia_pct: number;
+
+  coste_material: number;
+  coste_recorte: number;
+  coste_mano_obra: number;
+  minutos_estimados: number;
+  /** Ya con preparación y mínimo de trabajo aplicados. */
+  coste_interno: number;
+  aplicado_minimo: boolean;
+
+  margen_aplicado_pct: number;
+  /** Precio final del compuesto, sin IVA. Valor autoritativo. */
+  precio_total: number;
+  /** `precio_total / cantidad_total_logos`, informativo para el PDF. */
+  precio_promedio_por_logo: number;
+
+  /** Cada logo en su posición final dentro del rollo. */
+  layout: LogoColocado[];
+
+  /** Avisos no bloqueantes para la UI del wizard. */
+  warnings: string[];
+
+  detalle_calculo: ComposicionSnapshot;
+}
+
 /** Resultado uniforme de cualquier función de cálculo. */
 export interface CalculoResultado<
   TInputs = Record<string, unknown>,

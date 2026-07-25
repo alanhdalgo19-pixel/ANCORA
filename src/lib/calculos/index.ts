@@ -13,6 +13,8 @@ export {
   type DtfResultado,
 } from "./dtf";
 
+export { componerDTF } from "./composicion-dtf";
+
 export {
   calcularBordado,
   type BordadoInput,
@@ -71,4 +73,12 @@ export {
   type UbicacionSerigrafia,
   type ColorGrupo,
   type CodigoTecnica,
+  type LogoInput,
+  type DtfComposicionConfig,
+  type LogoColocado,
+  type ComposicionResultado,
+  type ComposicionSnapshot,
+  type ComposicionDetalleCalculo,
+  type SnapshotComposicion,
+  type SnapshotComercialComposicion,
 } from "./types";
