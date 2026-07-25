@@ -345,7 +345,7 @@ async function sembrarTarifasSerigrafia() {
   );
 }
 
-// ── A.9: Márgenes por tramo de cantidad (provisionales) ──────────────
+// ── A.9: Márgenes por tramo de cantidad ──────────────────────────────
 
 const TRAMOS = [
   { desde: 1, hasta: 19 },
@@ -354,12 +354,17 @@ const TRAMOS = [
   { desde: 500, hasta: null },
 ];
 
+// Solo DTF lleva margen: es la única técnica donde se construye un coste real
+// (material + mano de obra + preparación). Las tarifas de bordado, serigrafía,
+// impresión directa y sublimación ya son precios de venta, así que aplicarles
+// margen inflaría el precio un 30-40% sobre lo que Ancora cobra hoy.
+// Ver CLAUDE.md sección 13.4 (Patch 4A).
 const MARGENES_POR_TECNICA = {
   DTF: [60, 50, 40, 30],
-  BORDADO: [55, 45, 35, 25],
-  SERIGRAFIA: [50, 40, 30, 20],
-  IMPRESION_DIRECTA: [55, 45, 35, 25],
-  SUBLIMACION: [55, 45, 35, 25],
+  BORDADO: [0, 0, 0, 0],
+  SERIGRAFIA: [0, 0, 0, 0],
+  IMPRESION_DIRECTA: [0, 0, 0, 0],
+  SUBLIMACION: [0, 0, 0, 0],
 };
 
 async function sembrarTramosMargen() {
@@ -410,7 +415,7 @@ async function sembrarTramosMargen() {
     body: JSON.stringify(faltantes),
   });
   console.log(
-    `Creados ${faltantes.length} tramos de margen (${existentes.length} ya existían). Recuerda: son provisionales.`,
+    `Creados ${faltantes.length} tramos de margen (${existentes.length} ya existían). Solo DTF lleva margen; el resto va a 0%.`,
   );
 }
 

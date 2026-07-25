@@ -758,7 +758,7 @@ El `CLAUDE.md` original mencionaba en la sección 6.1 una tabla `colores`, pero 
 
 Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicional. Por defecto el sistema factura como Ancora factura hoy.
 
-**Nota:** este ajuste de los valores por defecto se hará en un mini-prompt de patch posterior al Prompt 4.
+**Nota: [APLICADO en Patch 4A].** Los 32 tramos afectados (4 técnicas × 4 tramos × 2 tipos de cliente) están a 0% en Supabase. Aplicado con `scripts/patch_margenes.mjs` (`npm run patch:margenes`, idempotente) y reflejado también en `MARGENES_POR_TECNICA` de `scripts/seed_admin_data.mjs` para que un entorno nuevo nazca ya con los valores correctos. DTF conserva 60/50/40/30.
 
 ### 13.5. Node.js 20 será deprecado por @supabase/supabase-js
 
@@ -847,7 +847,7 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 
 9. **Sublimación bloquea con `precio_unitario_base = 0` (estado semilla actual)**, con mensaje que apunta al panel admin: "Tarifa de sublimación pendiente de configurar (PTE TARIFA ESPE)".
 
-10. **Márgenes provisionales ajustados: A3.** Los tramos de margen se mantienen en la arquitectura, pero los valores por defecto de bordado, serigrafía, impresión directa y sublimación pasan a 0%. Solo DTF conserva 60/50/40/30. Ver sección 13.4 para el razonamiento completo. **Este ajuste se aplicará en un mini-prompt de patch tras cerrar Prompt 4.**
+10. **Márgenes provisionales ajustados: A3.** Los tramos de margen se mantienen en la arquitectura, pero los valores por defecto de bordado, serigrafía, impresión directa y sublimación pasan a 0%. Solo DTF conserva 60/50/40/30. Ver sección 13.4 para el razonamiento completo. **[APLICADO en Patch 4A].**
 
 **Nota adicional:** los stubs de Prompt 0 (`calculateDtfPrice`, etc.) se han sustituido; no tenían ningún consumidor en la app.
 
@@ -861,4 +861,16 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 
 ---
 
-*Última actualización del documento: julio 2026 tras cierre de Prompt 4.*
+### Patch 4A — Márgenes provisionales a 0% (decisión A3)
+
+1. **Se aplicó por script Node (Opción B), no por migración SQL.** El proyecto no tiene el CLI de Supabase instalado ni `supabase/config.toml`, así que `supabase db push` no era posible; y `tramos_margen` nunca se sembró desde `supabase/seed.sql` (ese fichero lo excluye explícitamente) sino desde `scripts/seed_admin_data.mjs`. Añadir una migración SQL habría creado un fichero que nadie ejecuta y que duplicaría la fuente de verdad de esos datos. El patch vive donde ya vivían los datos: en los scripts.
+
+2. **Doble cambio para que el patch no se revierta solo.** `scripts/patch_margenes.mjs` (`npm run patch:margenes`) corrige la base de datos actual; `MARGENES_POR_TECNICA` en `scripts/seed_admin_data.mjs` pasa a `[0,0,0,0]` para las 4 técnicas afectadas, de modo que un entorno nuevo nazca correcto. Sin lo segundo, un `npm run seed:admin` sobre una base limpia habría vuelto a meter los valores viejos.
+
+3. **El script es idempotente por filtro, no por reintento.** Solo hace PATCH sobre las filas con `margen_pct=neq.0`, así que una segunda ejecución no toca nada y el recuento del log refleja el cambio real. Verificado ejecutándolo dos veces: 32 filas la primera, 0 la segunda.
+
+4. **Motor de cálculo y tests intactos.** Los tests inyectan los tramos de margen como parámetro, no los leen de Supabase, así que siguen en 145/145 sin tocar una línea.
+
+---
+
+*Última actualización del documento: julio 2026 tras aplicar el Patch 4A.*

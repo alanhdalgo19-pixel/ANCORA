@@ -108,13 +108,13 @@ export default async function AdminDashboardPage() {
         )}
 
         <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
-          ⚠️ <strong>Márgenes provisionales sin confirmar</strong> — los
-          márgenes cargados en{" "}
+          ⚠️ <strong>Márgenes DTF provisionales (60/50/40/30)</strong> — es la
+          única técnica con margen aplicado; el resto está a 0% porque sus
+          tarifas ya son precios de venta. Revísalos en{" "}
           <a href="/admin/margenes" className="underline">
             Márgenes
-          </a>{" "}
-          son valores provisionales del sector, pendientes de validar con
-          Esperanza.
+          </a>
+          .
         </div>
 
         {prendasSinPrecios > 0 && (

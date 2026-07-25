@@ -29,9 +29,11 @@ export default async function AdminMargenesPage() {
       </h1>
 
       <div className="mt-4 max-w-2xl rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
-        ⚠️ Los márgenes cargados inicialmente son provisionales del sector.
-        Confirmar con Espe antes de usar en presupuestos reales que se envíen
-        a clientes.
+        ⚠️ <strong>Solo el DTF tiene margen aplicado por defecto</strong>{" "}
+        (60/50/40/30). Las tarifas de bordado, serigrafía, impresión directa y
+        sublimación ya son precios de venta, así que sus márgenes están en 0%.
+        Espe puede subirlos si quiere aplicar un recargo adicional. Ver{" "}
+        <code>CLAUDE.md</code> sección 13.4 para el razonamiento.
       </div>
 
       <p className="mt-4 max-w-2xl text-sm text-muted-foreground">
