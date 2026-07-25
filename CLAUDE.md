@@ -638,7 +638,7 @@ Lista viva de cosas pendientes de confirmar. Marcar como [RESUELTO] cuando se ac
 12. Cálculo de minutos de operario DTF: confirmar valor de `minutos_setup_fijo` y `minutos_por_logo`.
 13. Sobrecargo serigrafía prenda oscura: confirmado 35€/color pecho, 37€/color espalda.
 14. [RESUELTO] Bordado: 3 tarifas (0.35/0.40/0.45) + personalizable (default 0.45), descuento habitual variable manual.
-15. **Unidad de medida del bordado**: por_puntada / por_100_puntadas / por_1000_puntadas. Sospechamos por_1000_puntadas. Configurable en panel admin, validar en primer uso real.
+15. **[RESUELTO en Prompt 4] Unidad de medida del bordado: `por_1000_puntadas`**. Confirmado por triangulación con tests automáticos sobre los presupuestos históricos: con `por_puntada` Formentera saldría a 1.925€/pieza (imposible) y con `por_100_puntadas` a 19.25€/pieza (imposible); con `por_1000_puntadas` sale a 1.90€/pieza, coincidiendo con lo que Ancora cobró. La unidad sigue siendo configurable en el panel admin por si Espe quiere cambiar, pero el sistema opera con la unidad correcta desde el arranque.
 16. Umbral exacto cliente habitual: 3.000 €/año con revisión anual.
 17. Si la lógica cliente esporádico/habitual aplica a todas las técnicas (sí, confirmado).
 
@@ -696,12 +696,13 @@ Estado a fecha de la última actualización del documento.
 | Panel admin: costes operativos | ✅ Completado | Prompt 3 |
 | Panel admin: CRUD proveedores | ✅ Completado | Prompt 3 |
 | Panel admin: catálogo de prendas + matriz de precios | ✅ Completado | Prompt 3 |
-| Wizard de presupuesto | ⏳ Pendiente | Prompt 4-5 |
-| Motor de cálculo por técnica | ⏳ Stubs creados en `src/lib/calculos/` | Prompt 4 |
-| Generación de PDF | ⏳ Pendiente | Prompt 6-7 |
-| Composición DTF | ⏳ Pendiente | Prompt 8 |
-| Histórico y filtros | ⏳ Pendiente | Prompt 9 |
-| Exportación a Excel | ⏳ Pendiente | Prompt 10 |
+| Motor de cálculo por técnica | ✅ Completado con 145 tests | Prompt 4 |
+| Tests automáticos (Vitest) | ✅ 145/145 passing | Prompt 4 |
+| Wizard de presupuesto | ⏳ Pendiente | Prompt 6 |
+| Bin packing DTF (composición múltiples logos) | ⏳ Pendiente | Prompt 5 |
+| Generación de PDF | ⏳ Pendiente | Prompt 7 |
+| Histórico y filtros | ⏳ Pendiente | Prompt 8 |
+| Exportación a Excel | ⏳ Pendiente | Prompt 9 |
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
@@ -744,6 +745,34 @@ El `CLAUDE.md` original mencionaba en la sección 6.1 una tabla `colores`, pero 
 **Estado actual:** el "color" de una prenda se guarda como texto libre en `lineas_presupuesto.color` (campo `text`). No hay paleta cerrada.
 
 **Decisión pendiente:** valorar si se necesita una tabla `colores` con paleta cerrada (útil para consistencia y para filtros en catálogo) o si el texto libre es suficiente. Preguntar a Espe cuando sea relevante.
+
+### 13.4. Márgenes provisionales para bordado y serigrafía puestos a 0%
+
+**Hallazgo del Prompt 4:** los tests con presupuestos históricos revelaron que las tarifas de bordado (0.35/0.40/0.45 por 1000 puntadas) y las tablas de serigrafía **ya son precios de venta, no costes internos**. Aplicarles el margen provisional del sector (35-50%) inflaba los precios un 30-40% respecto a lo que Ancora cobra en realidad.
+
+**Ejemplos concretos:**
+- Formentera Lines: tarifa da 1.93€/pieza (~ 1.90€ que Espe cobró). Con margen 35% del tramo 100-499, el motor factura 2.61€/ud — 37% por encima de lo real.
+- Serigrafía esporádico, 100 uds pecho 1 color: tarifa 1.27€/ud, con margen 30% el motor emite 1.65€/ud.
+
+**Decisión tomada (A3):** los tramos de margen se mantienen en la arquitectura porque dan flexibilidad, pero los **valores provisionales de bordado, serigrafía, impresión directa y sublimación pasan a 0%** por defecto. Solo DTF conserva sus márgenes (60/50/40/30) porque ahí sí se construye un coste real desde material + mano de obra + preparación.
+
+Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicional. Por defecto el sistema factura como Ancora factura hoy.
+
+**Nota:** este ajuste de los valores por defecto se hará en un mini-prompt de patch posterior al Prompt 4.
+
+### 13.5. Node.js 20 será deprecado por @supabase/supabase-js
+
+Durante el `npm run build` del Prompt 4 aparecen múltiples warnings:
+
+```
+Node.js 20 and below are deprecated and will no longer 
+be supported in future versions of @supabase/supabase-js. 
+Please upgrade to Node.js 22 or later.
+```
+
+**Estado actual:** funciona perfectamente con Node 20.20.2 (versión instalada en el desarrollo). El build compila sin errores.
+
+**Deuda técnica:** cuando Node 20 alcance su fin oficial de vida (abril 2026) o cuando `@supabase/supabase-js` publique una versión que exija Node 22+, será necesario actualizar la máquina de desarrollo y las variables de entorno de producción (Vercel) a Node 22 LTS. Cambio menor.
 
 ---
 
@@ -791,6 +820,45 @@ Decisiones técnicas o de diseño tomadas por Claude Code durante los prompts se
 
 8. **Dos bugs detectados y corregidos durante la implementación**: (a) error de iteración TypeScript en la generación de la matriz de precios de prenda; (b) bug en la lógica de "prendas sin precios" que contaba mal las prendas cuando todos los precios eran 0.00. Ambos resueltos antes de commit final.
 
+### Prompt 4 — Motor de cálculo con tests
+
+**Hallazgos revelados por los tests con datos históricos:**
+
+- **Confirmada la unidad `por_1000_puntadas` para bordado** por triangulación con Formentera Lines (302 uds a 1.90€/pieza real vs 1.90€ calculado). Ver sección 10 punto 15 [RESUELTO].
+- **Descubierto que las tarifas de bordado y serigrafía ya son precios de venta**, no costes internos. Aplicar margen provisional infla los precios un 30-40% respecto a lo que Ancora cobra. Ver sección 13.4 y decisión 10 abajo.
+
+**Decisiones técnicas de implementación:**
+
+1. **`importe_linea` es el valor autoritativo**, no `precio_unitario × cantidad`. En el caso canónico salen 59.54€ vs 60.00€. El unitario se redondea solo para mostrarlo en el PDF. Contradice la nota del esquema (`importe_linea = cantidad × precio_unitario`) — Decisión B3 tomada para el PDF: se mostrará `importe_linea` real como total y `precio_unitario` redondeado como referencia, aceptando que la multiplicación matemática pura no cuadra (es el estándar de ERPs profesionales).
+
+2. **`redondear2` usa half-up con normalización `toPrecision(12)`**, no redondeo bancario. `Math.round(n*100)/100` a secas falla con 1.235 (da 1.23).
+
+3. **`minutos_estimados` se redondea a entero con `Math.round`.** CLAUDE.md 7.6 lo muestra entero pero no dice cómo redondear.
+
+4. **El coste interno se compone de sumandos ya redondeados**, para que el desglose del snapshot cuadre céntimo a céntimo en pantalla.
+
+5. **Impresión directa comparte núcleo con serigrafía (`calcularBaseTarifaSerigrafia`), no la envuelve.** No es idéntica: tiene mínimo propio (15€ vs 20€) y tramos de margen propios. Envolverla obligaría a pasarle una config falseada y parchear el snapshot después.
+
+6. **Snapshots tipados con genéricos (`CalculoResultado<TInputs, TCalculo>`)** en vez de `Record<string, unknown>`, para que el wizard y los tests accedan a `detalle_calculo.calculo.logos_por_fila` sin casts.
+
+7. **`TramoMargen` y `Ubicacion` viven en `lib/calculos/types.ts` NO en los de `types/database.ts`.** El del motor es la forma de cálculo (`{ desde, hasta, margen_pct }`, ya filtrada por técnica y cliente); `Ubicacion` del motor equivale a `Posicion` del esquema. Documentado en la cabecera del fichero.
+
+8. **`aplicarMargen` lanza error si no hay tramo** en vez de asumir margen 0. Un presupuesto sin margen es un error de configuración, no un caso válido.
+
+9. **Sublimación bloquea con `precio_unitario_base = 0` (estado semilla actual)**, con mensaje que apunta al panel admin: "Tarifa de sublimación pendiente de configurar (PTE TARIFA ESPE)".
+
+10. **Márgenes provisionales ajustados: A3.** Los tramos de margen se mantienen en la arquitectura, pero los valores por defecto de bordado, serigrafía, impresión directa y sublimación pasan a 0%. Solo DTF conserva 60/50/40/30. Ver sección 13.4 para el razonamiento completo. **Este ajuste se aplicará en un mini-prompt de patch tras cerrar Prompt 4.**
+
+**Nota adicional:** los stubs de Prompt 0 (`calculateDtfPrice`, etc.) se han sustituido; no tenían ningún consumidor en la app.
+
+**Cobertura de tests:** 145/145 tests passing distribuidos así:
+- `helpers.test.ts`: 28 tests
+- `dtf.test.ts`: 36 tests (incluido caso canónico documentado en CLAUDE.md 7.2)
+- `bordado.test.ts`: 27 tests (incluidos Formentera Lines y Colla Castellers reales)
+- `serigrafia.test.ts`: 27 tests (esporádico + habitual + oscura + errores)
+- `impresion-directa.test.ts`: 13 tests
+- `sublimacion.test.ts`: 14 tests
+
 ---
 
-*Última actualización del documento: julio 2026 tras cierre de Prompt 3.*
+*Última actualización del documento: julio 2026 tras cierre de Prompt 4.*
