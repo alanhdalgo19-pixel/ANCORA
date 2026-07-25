@@ -32,6 +32,12 @@ export function Topbar({ nombre, rol }: TopbarProps) {
 
         <nav className="flex items-center gap-4">
           <Link
+            href="/presupuestos"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            Presupuestos
+          </Link>
+          <Link
             href="/clientes"
             className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
