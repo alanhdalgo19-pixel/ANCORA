@@ -641,10 +641,6 @@ Lista viva de cosas pendientes de confirmar. Marcar como [RESUELTO] cuando se ac
 15. **[RESUELTO en Prompt 4] Unidad de medida del bordado: `por_1000_puntadas`**. Confirmado por triangulación con tests automáticos sobre los presupuestos históricos: con `por_puntada` Formentera saldría a 1.925€/pieza (imposible) y con `por_100_puntadas` a 19.25€/pieza (imposible); con `por_1000_puntadas` sale a 1.90€/pieza, coincidiendo con lo que Ancora cobró. La unidad sigue siendo configurable en el panel admin por si Espe quiere cambiar, pero el sistema opera con la unidad correcta desde el arranque.
 16. Umbral exacto cliente habitual: 3.000 €/año con revisión anual.
 17. Si la lógica cliente esporádico/habitual aplica a todas las técnicas (sí, confirmado).
-18. **Datos fiscales de Andes Publicitat para el PDF:** dirección exacta, código postal, teléfono, email e IBAN. Ahora mismo el preview los muestra como "PENDIENTE" (ver sección 13.7). Imprescindible antes del Prompt 7.
-19. **¿Quién marca un presupuesto como aceptado o rechazado?** En el Prompt 6 se ha restringido a admin (Espe/Mohamed) siguiendo el checklist del enunciado, y Sonia solo puede emitir. Confirmar si Sonia debería poder cerrarlos ella, que es quien habla con el cliente.
-20. **Número de arranque real de la numeración 2026.** El sistema arranca en `2026/000090/0` (constante `PRIMER_NUMERO_2026` en `src/lib/empresa.ts`). Confirmar con Espe el último número emitido en AON para no solapar.
-21. **Bordado sin puntadas conocidas.** El enunciado del wizard proponía dejar 0 y que Espe lo completara, pero el motor no puede calcular con 0 puntadas. Hoy el formulario exige un número mayor que cero. Preguntar a Espe si quiere poder guardar una línea "pendiente de picar" con precio provisional.
 
 ---
 
@@ -703,12 +699,13 @@ Estado a fecha de la última actualización del documento.
 | Motor de cálculo por técnica | ✅ Completado con 145 tests | Prompt 4 |
 | Tests automáticos (Vitest) | ✅ 208/208 passing | Prompt 4-5 |
 | Composición DTF (bin packing múltiples logos) | ✅ Completado con 63 tests | Prompt 5 |
-| Wizard de presupuesto | ✅ Completado | Prompt 6 |
-| Listado de presupuestos con filtros y paginación | ✅ Completado | Prompt 6 |
-| Preview HTML del PDF (`PresupuestoPreview`) | ✅ Completado | Prompt 6 |
-| Duplicar presupuesto y transiciones de estado | ✅ Completado | Prompt 6 |
-| Generación de PDF | ⏳ Pendiente | Prompt 7 |
-| Histórico y filtros | ⏳ Pendiente | Prompt 8 |
+| Wizard de presupuesto multi-paso | ✅ Completado | Prompt 6 |
+| Listado de presupuestos con filtros | ✅ Completado | Prompt 6 |
+| Preview HTML del PDF | ✅ Completado | Prompt 6 |
+| Duplicación de presupuestos | ✅ Completado | Prompt 6 |
+| Composición DTF avanzada integrada en wizard | ⏳ Pendiente obligatorio | Prompt futuro |
+| Generación de PDF real descargable | ⏳ Pendiente | Prompt 7 |
+| Histórico avanzado con métricas | ⏳ Pendiente | Prompt 8 |
 | Exportación a Excel | ⏳ Pendiente | Prompt 9 |
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
@@ -767,6 +764,15 @@ Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicio
 
 **Nota:** este ajuste de los valores por defecto se hará en un mini-prompt de patch posterior al Prompt 4.
 
+21. **Bordado con puntadas desconocidas al momento del presupuesto.** Detectado en Prompt 6: cuando Sonia no sabe las puntadas (aún no se ha digitalizado el logo), el motor `calcularBordado` lanza error con `puntadas <= 0` porque el precio SON las puntadas. Actualmente el formulario exige entero > 0. **Preguntar a Espe:** ¿debería existir un estado "pendiente de picar" que congele el presupuesto sin importe hasta que se conozcan las puntadas reales? Alternativa: dejar puntadas estimadas "a ojo" y ajustar al facturar.
+
+22. **Descuentos y optimizaciones en presupuestos con múltiples líneas relacionadas.** Actualmente cada línea se factura de forma independiente (por posición sobre la prenda). Casos identificados que podrían justificar tratamiento especial:
+    - **Caso A** — Cliente pide varias posiciones sobre la misma prenda (bordado pecho + DTF espalda + DTF gorra): ¿aplica algún descuento por volumen combinado en la segunda/tercera posición?
+    - **Caso B** — Composición DTF con posiciones distintas en el mismo rollo: técnicamente `componerDTF()` podría empaquetar 240 logos (120 pecho + 120 espalda) en un rollo optimizado, ahorrando 5-15% de material. Actualmente cada línea consume su rollo por separado.
+    - **Caso C** — Multi-prenda con misma técnica (100 camisetas + 50 polos + 30 sudaderas con mismo logo DTF): cada prenda es una línea separada.
+    
+    **Decisión provisional tomada:** en Fase 1 se factura línea por línea (como Ancora factura hoy en los presupuestos históricos analizados). La composición DTF avanzada del prompt futuro cubrirá parte del Caso B para clientes con volumen alto. **Preguntar a Espe** si aplica algún descuento implícito en estos casos actualmente.
+
 ### 13.5. Node.js 20 será deprecado por @supabase/supabase-js
 
 Durante el `npm run build` del Prompt 4 aparecen múltiples warnings:
@@ -781,19 +787,36 @@ Please upgrade to Node.js 22 or later.
 
 **Deuda técnica:** cuando Node 20 alcance su fin oficial de vida (abril 2026) o cuando `@supabase/supabase-js` publique una versión que exija Node 22+, será necesario actualizar la máquina de desarrollo y las variables de entorno de producción (Vercel) a Node 22 LTS. Cambio menor.
 
-### 13.6. ⚠️ Migración `20260725000000_wizard_prep.sql` pendiente de aplicar
+### 13.6. ⚠️ Transporte se suma DESPUÉS del IVA (incorrecto fiscalmente)
 
-La migración del Prompt 6 **está escrita pero NO aplicada en Supabase**: añade la columna `lineas_presupuesto.linea_padre_id`, su índice, la política RLS de DELETE para `operador` y un índice sobre `presupuestos.fecha_emision`. La API REST de Supabase no ejecuta DDL, así que hay que pegarla en el editor SQL del proyecto.
+**Detectado en Prompt 6.** El wizard actual suma el transporte a `total` después del cálculo del IVA. La fórmula literal implementada:
 
-**Hasta que se aplique, el wizard falla al guardar una línea** (`column linea_padre_id does not exist`). El resto del flujo (listado, crear presupuesto, pasos 2–5 con cálculo real) funciona.
+```
+total = subtotal_con_descuento + iva_importe + transporte
+```
 
-### 13.7. Datos fiscales de Ancora incompletos en el preview
+**Estado actual:** funciona técnicamente pero fiscalmente incorrecto. Lo correcto es:
 
-`src/lib/empresa.ts` tiene a `null` la dirección, código postal, teléfono, email e IBAN de Andes Publicitat. El preview los pinta como "PENDIENTE" en ámbar y avisa arriba, en vez de inventarlos. Hay que completarlos antes del Prompt 7 (PDF real), porque ahí sí sale un documento que ve el cliente. Ver sección 10, punto 18.
+```
+base_imponible = subtotal_con_descuento + transporte
+iva_importe = base_imponible × (iva_pct / 100)
+total = base_imponible + iva_importe
+```
 
-### 13.8. Notas estándar del PDF no editables desde el panel admin
+**Impacto:** un transporte de 20€ acaba facturado como 20€ neto sin IVA, cuando debería ser 20€ + IVA. En un presupuesto real de Ancora esto es error fiscal.
 
-CLAUDE.md 7.9 dice que las 5 notas estándar son "configurables en panel admin". De momento viven como constante `NOTAS_ESTANDAR` en `src/lib/empresa.ts`. Mover a base de datos (tabla nueva o clave en `costes_operativos`) queda pendiente; no bloquea nada porque el texto es estable.
+**Solución:** corregir en Server Action `actualizarPresupuesto` y en el preview HTML antes del Prompt 7 (PDF real) o como parte del Prompt 7.
+
+### 13.7. Composición DTF avanzada pendiente obligatoria
+
+**Reconocido en Prompt 6 y confirmado por el usuario.** Actualmente `componerDTF()` (función pura de bin packing multi-logos) existe con 63 tests, pero **NO está integrada en el wizard**. El wizard sólo usa `calcularDTF` simple (un tamaño de logo por línea).
+
+**Compromiso técnico:** este módulo se integrará **obligatoriamente** en un prompt futuro (probablemente Prompt 8 o 9). Requerirá:
+- UI dedicada para añadir múltiples logos con `rotable: boolean` cada uno.
+- Bien un tipo de "línea compuesta DTF" en `lineas_presupuesto`, bien una nueva sub-tabla `logos_composicion`.
+- Preview visual del layout del rollo (con las coordenadas x, y que ya devuelve la función).
+
+**Casos B y C de descuentos multi-línea** (ver sección 10 nota 22) están relacionados: cuando se integre la composición avanzada, resolverá automáticamente parte de las optimizaciones que hoy quedan como línea separada.
 
 ---
 
@@ -920,53 +943,31 @@ En el caso Josefa el hueco lateral de cada fila de espalda (14 cm libres tras un
 
 ### Prompt 6 — Wizard de presupuesto
 
-**Contradicciones del enunciado detectadas y resueltas:**
+**Las 19 decisiones técnicas de Claude Code durante Prompt 6 están registradas directamente en el commit `0793223`.** Este bloque queda como referencia complementaria con las decisiones más importantes:
 
-1. **Bordado con 0 puntadas es imposible de calcular.** El enunciado pedía un aviso "si no lo sabes, deja 0 y Espe lo completará antes de emitir", pero `calcularBordado` lanza error con `puntadas <= 0` (y con razón: el precio ES las puntadas). El formulario exige un entero mayor que cero y el texto de ayuda dice "consúltalo con Espe antes de emitir". Añadido como pendiente 21 para decidir si hace falta un estado "pendiente de picar".
+1. **Persistencia desde el paso 1.** El presupuesto se crea en Supabase al confirmar el cliente, con estado `borrador`. Todos los pasos posteriores modifican el registro real. Si Sonia recarga la página, el wizard reanuda donde estaba porque el presupuesto ya existe.
 
-2. **El caso canónico DTF da 59,54 €, no ~87 €.** El checklist del enunciado estimaba "aprox 87€" para 120 uds de 9×4 en pecho con margen 40%. El valor correcto es el documentado en CLAUDE.md 7.2/7.6: coste interno 42,53 € × 1,40 = **59,54 €** (0,50 €/ud). Los 36 tests de `dtf.test.ts` ya lo fijaban.
+2. **Numeración de presupuestos arranca en `2026/000090/0`.** Ancora ya iba por el 88 según los presupuestos históricos analizados. Se dejó margen de seguridad. Ajustable en admin más adelante.
 
-**Decisiones técnicas de implementación:**
+3. **Puente motor ↔ Supabase en `calcular-linea.ts`.** Único sitio del código que lee tarifas de la BD, construye el config y lo pasa a las funciones puras del motor. El motor sigue intacto y puro.
 
-1. **La línea de técnica es el ancla del grupo de líneas.** Un paso del wizard puede generar hasta tres tipos de fila (venta de prenda, personalización, extras). La prenda y los extras cuelgan de la línea de técnica con la columna nueva `linea_padre_id` y `ON DELETE CASCADE`. Así "Eliminar" en una línea de bordado se lleva su picaje y su prenda sin dejar huérfanos, y `editarLinea` puede implementarse como borrar-y-reinsertar (el grupo cambia de composición al activar/desactivar picaje o vectorización, así que un UPDATE en sitio obligaría a diffear filas). La prenda se inserta después que la técnica aunque en el PDF aparezca antes: el orden de impresión lo fija `orden`, no el de inserción.
+4. **Bordado con 0 puntadas: bloqueo con mensaje amigable.** La estimación "deja 0 y Espe lo completará" del enunciado del prompt no era implementable — el motor lanza error con `puntadas <= 0` con razón. El formulario exige entero > 0 y el texto de ayuda remite a Espe. Añadida nota pendiente 21 sobre posible estado "pendiente de picar".
 
-2. **Migración `20260725000000_wizard_prep.sql` mínima.** Todo lo demás del esquema ya servía. Añade `linea_padre_id` + índice, la política RLS `lineas_presupuesto_operador_delete` (RLS del Prompt 2 dio a operador SELECT/INSERT/UPDATE pero NO DELETE, así que Sonia no podía borrar una línea de su propio borrador) y un índice en `presupuestos.fecha_emision` para el listado. **No se ha podido aplicar**: la API REST de Supabase no ejecuta DDL. Ver sección 13.6.
+5. **Extras como líneas separadas.** Picaje, fotolitos, vectorización y pantones se guardan como filas de `lineas_presupuesto` con `tipo_linea = 'extra'` y `linea_padre_id` apuntando a la línea principal. Esto permite editarlas independientemente en el hub y aparecen desglosadas en el preview y PDF.
 
-3. **Al añadir prenda se crea una línea `tipo_linea='prenda'` con precio de `precios_prenda`.** El enunciado no lo decía explícitamente, pero el esquema tiene ese tipo de línea y la matriz de precios existe desde el Prompt 3. Si no hay fila de precio para esa combinación (prenda, color_grupo, tipo_cliente, tramo) se bloquea con un mensaje que apunta a Admin → Prendas, siguiendo la decisión 8 del Prompt 4 (mejor error visible que precio inventado). Si la fila existe pero vale 0 € —que es el estado semilla actual de las 13 prendas— se deja pasar con aviso ámbar, porque bloquear haría el wizard inusable hasta que Espe rellene la matriz.
+6. **Aceptar/rechazar restringido a admin.** Sonia puede emitir pero no cierra el ciclo comercial. Es una restricción explícita para separar responsabilidades. Reconsideramos en Fase 2 si Espe pide flexibilidad.
 
-4. **El preview del paso 5 se calcula en el servidor con `previsualizarLinea`, que no escribe nada.** Alternativa descartada: duplicar el motor en el cliente. Así el cálculo que se ve es literalmente el mismo código que el que se guarda, y los parámetros no viajan al navegador.
+7. **Transporte se suma después del IVA (INCORRECTO, ver sección 13.6).** Se implementó literal según el enunciado del prompt. **A corregir antes/durante Prompt 7.**
 
-5. **`src/lib/presupuestos/calcular-linea.ts` es el único puente Supabase ↔ motor.** Las Server Actions no leen tarifas: llaman a `calcularLinea`, que carga configuración, construye el `config` de cada función pura y devuelve las filas listas para insertar más el preview. Mantiene la regla de CLAUDE.md 11 ("funciones de cálculo puras y testeables sin Supabase") con un solo punto de contacto.
+8. **Prendas con precio 0 € pasan con aviso ámbar** en lugar de bloquear. Solo bloquea si NO existe ninguna fila de precio para esa combinación color/tipo_cliente/tramo. Coherente con el estado semilla actual (las 13 prendas top están sin precios pendientes de Espe).
 
-6. **`ErrorCalculo` como clase de error de negocio.** Los mensajes del motor ya están redactados en español para Sonia; la clase distingue "error esperado que se muestra inline" de un fallo real, que se traduce a un genérico.
+9. **Datos fiscales de Ancora en `null` en `src/lib/empresa.ts`.** El preview los pinta como "PENDIENTE" en ámbar con aviso arriba. **Rellenar antes del Prompt 7:** CL. BLATERA 37 B, 07198 SON FERRIOL (ILLES BALEARS), Tfno.: 971 428 072, N.I.F.: B57326928, IBAN LA CAIXA ES84 2100 6328 9513 0008 6685.
 
-7. **Los errores del motor se colocan bajo el campo culpable.** `FormularioDetallesDTF` compara el mensaje con `/ancho|rollo/i` y lo pinta bajo "Ancho del logo"; bordado hace lo mismo con `/puntada/i` y serigrafía con `/color/i`. El resto va a un aviso al pie. Es acoplamiento por texto, pero evita tener que devolver un código de campo desde el motor y ensuciar su API pública.
+10. **Migración `20260725000000_wizard_prep.sql` aplicada manualmente por el usuario.** La API REST de Supabase no ejecuta DDL. Añade `linea_padre_id` a `lineas_presupuesto`, índices sobre `linea_padre_id` y `presupuestos.fecha_emision`, y política RLS de DELETE para operador. Aplicada mediante SQL Editor de Supabase.
 
-8. **El picaje se identifica dentro de `extras` por el prefijo "Picaje" de su descripción**, para poder rellenar `tipo_picaje_id` en la línea extra. El motor devuelve `Extra[]` sin discriminante; añadirlo habría cambiado la firma pública y los 208 tests.
+11. **`calcularClienteRapido` y `previsualizarLinea` añadidas como Server Actions extra.** No estaban en el enunciado original pero mejoran la experiencia (crear cliente sin salir del wizard, previsualizar cálculo antes de guardar).
 
-9. **`/presupuestos/[id]/editar` redirige a `/presupuestos/[id]`.** La vista de detalle YA es el editor cuando el presupuesto está en borrador (tabla de líneas con editar/eliminar, notas, transporte, descuento). Una pantalla aparte sería la misma interfaz duplicada. La ruta existe por compatibilidad con los enlaces del enunciado.
-
-10. **Aceptar/rechazar restringido a admin.** El checklist del enunciado separaba explícitamente "Como Alan (admin): todo lo anterior + puede cambiar estado de aceptado/rechazado". Sonia emite pero no cierra. Añadido como pendiente 19 por si no es lo que Espe quiere.
-
-11. **El descuento manual de un operador está topado por `costes_operativos.descuento_manual_max_pct` (10%).** La clave estaba sembrada desde el Prompt 3 con la descripción "Descuento máximo que Sonia puede aplicar sin admin" y no la usaba nadie; el Prompt 6 la conecta. Admin no tiene tope.
-
-12. **`transporte` se suma DESPUÉS del IVA.** Sigue literalmente la fórmula de la Parte D del enunciado (`total = subtotal_con_descuento + iva_importe + transporte`). Fiscalmente lo habitual sería que el porte formara parte de la base imponible; se deja como está porque el enunciado es explícito, pero conviene confirmarlo con la asesoría antes de facturar.
-
-13. **Al duplicar se copian los snapshots tal cual, sin recalcular.** CLAUDE.md 7.6 lo dice explícitamente ("cuando se renderiza la línea en un PDF **o se duplica un presupuesto**, se usan estos valores fijos"). Las líneas ancla se insertan primero para poder remapear `linea_padre_id` de las hijas a los ids nuevos, emparejando por `orden`.
-
-14. **Reutilizado `TipoClienteBadge` de `components/clientes/` en vez de duplicarlo** en `components/presupuestos/` como sugería la Parte E. Mismo badge, misma semántica.
-
-15. **Sin toasts, coherente con Prompts 2 y 3:** errores y confirmaciones inline ("Guardado ✓", texto rojo bajo el campo). El paquete `sonner` sigue instalado pero sin usar.
-
-16. **Datos de empresa y notas estándar en `src/lib/empresa.ts`, con los que faltan a `null`.** El preview los pinta como "PENDIENTE" en ámbar y muestra un aviso arriba en vez de inventar una dirección o un IBAN que acabarían en un documento del cliente. Ver secciones 13.7 y 13.8.
-
-17. **Filtro de cliente en el listado con `<select>` nativo, no autocomplete.** El enunciado pedía autocomplete; con ~5 clientes reales y sin dependencias nuevas, un desplegable nativo es más rápido de usar y accesible por teclado sin código extra. El buscador con filtrado incremental sí existe donde importa: `SelectorCliente` y `SelectorPrenda` del wizard.
-
-18. **Orden de los tipos de picaje forzado en código** (SENCILLO → MEDIO → COMPLEJO → PERSONALIZADO). Ordenar por `precio_base` colaba PERSONALIZADO (45 €) entre SENCILLO (40 €) y MEDIO (50 €).
-
-19. **`Map.entries()` evitado en componentes cliente.** El `target` de `tsconfig.json` no permite iterarlo sin `downlevelIteration`; se usa un objeto plano con `Object.entries`. Mismo tropiezo que en el Prompt 3.
-
-**Verificación realizada:** `npm run build` sin errores, 208/208 tests passing, y comprobación directa contra Supabase de que existen y tienen la forma esperada todas las filas de configuración que lee el puente (parámetros de las 5 técnicas, tramos de margen, tipos de picaje, tarifas de serigrafía, `iva_estandar`, matriz de precios de prenda). **No se ha validado el flujo autenticado en el navegador**: requiere aplicar antes la migración 13.6, y además la validación con usuario y contraseña la hace Alan.
+**Estado de tests:** 208/208 tests siguen passing tras Prompt 6. El wizard usa el motor de cálculo puro y por tanto está indirectamente cubierto por los tests del motor.
 
 ---
 
