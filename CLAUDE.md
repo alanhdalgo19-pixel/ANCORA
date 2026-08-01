@@ -641,6 +641,8 @@ Lista viva de cosas pendientes de confirmar. Marcar como [RESUELTO] cuando se ac
 15. **[RESUELTO en Prompt 4] Unidad de medida del bordado: `por_1000_puntadas`**. Confirmado por triangulación con tests automáticos sobre los presupuestos históricos: con `por_puntada` Formentera saldría a 1.925€/pieza (imposible) y con `por_100_puntadas` a 19.25€/pieza (imposible); con `por_1000_puntadas` sale a 1.90€/pieza, coincidiendo con lo que Ancora cobró. La unidad sigue siendo configurable en el panel admin por si Espe quiere cambiar, pero el sistema opera con la unidad correcta desde el arranque.
 16. Umbral exacto cliente habitual: 3.000 €/año con revisión anual.
 17. Si la lógica cliente esporádico/habitual aplica a todas las técnicas (sí, confirmado).
+18. **Email de contacto comercial de Ancora.** Es el único dato fiscal que sigue a `null` en `src/lib/empresa.ts` tras el Prompt 7. Mientras falte, la línea del email no aparece ni en el preview ni en el PDF (no se imprime "PENDIENTE": lo ve el cliente). Preguntar a Espe.
+23. **Logo vectorial oficial de Ancora Publicitat.** Solicitar a Espe/Mohamed el SVG o el PDF vectorial de alta calidad para sustituir el placeholder del PDF (disco azul-cyan con la letra "A") y usarlo también en la app. Ver decisión 5 del Prompt 7 y el pendiente 11, que es el mismo asunto.
 
 ---
 
@@ -697,14 +699,18 @@ Estado a fecha de la última actualización del documento.
 | Panel admin: CRUD proveedores | ✅ Completado | Prompt 3 |
 | Panel admin: catálogo de prendas + matriz de precios | ✅ Completado | Prompt 3 |
 | Motor de cálculo por técnica | ✅ Completado con 145 tests | Prompt 4 |
-| Tests automáticos (Vitest) | ✅ 208/208 passing | Prompt 4-5 |
+| Tests automáticos (Vitest) | ✅ 220/220 passing | Prompt 4-7 |
 | Composición DTF (bin packing múltiples logos) | ✅ Completado con 63 tests | Prompt 5 |
 | Wizard de presupuesto multi-paso | ✅ Completado | Prompt 6 |
 | Listado de presupuestos con filtros | ✅ Completado | Prompt 6 |
 | Preview HTML del PDF | ✅ Completado | Prompt 6 |
 | Duplicación de presupuestos | ✅ Completado | Prompt 6 |
+| Datos fiscales de Ancora completos | ✅ Completado | Prompt 7 (falta solo el email) |
+| Transporte dentro de la base imponible | ✅ Corregido | Prompt 7 |
+| Generación de PDF real descargable | ✅ Completado | Prompt 7 |
+| Archivo del PDF en Supabase Storage | ✅ Completado | Prompt 7 |
+| Logo vectorial real en el PDF | ⏳ Placeholder | Pendiente 23 |
 | Composición DTF avanzada integrada en wizard | ⏳ Pendiente obligatorio | Prompt futuro |
-| Generación de PDF real descargable | ⏳ Pendiente | Prompt 7 |
 | Histórico avanzado con métricas | ⏳ Pendiente | Prompt 8 |
 | Exportación a Excel | ⏳ Pendiente | Prompt 9 |
 
@@ -787,25 +793,25 @@ Please upgrade to Node.js 22 or later.
 
 **Deuda técnica:** cuando Node 20 alcance su fin oficial de vida (abril 2026) o cuando `@supabase/supabase-js` publique una versión que exija Node 22+, será necesario actualizar la máquina de desarrollo y las variables de entorno de producción (Vercel) a Node 22 LTS. Cambio menor.
 
-### 13.6. ⚠️ Transporte se suma DESPUÉS del IVA (incorrecto fiscalmente)
+### 13.6. [RESUELTO en Prompt 7] Transporte se sumaba DESPUÉS del IVA
 
-**Detectado en Prompt 6.** El wizard actual suma el transporte a `total` después del cálculo del IVA. La fórmula literal implementada:
-
-```
-total = subtotal_con_descuento + iva_importe + transporte
-```
-
-**Estado actual:** funciona técnicamente pero fiscalmente incorrecto. Lo correcto es:
+**Detectado en Prompt 6, corregido en el Prompt 7.** El wizard sumaba el transporte a `total` después del cálculo del IVA, lo que lo facturaba como importe neto exento:
 
 ```
-base_imponible = subtotal_con_descuento + transporte
-iva_importe = base_imponible × (iva_pct / 100)
-total = base_imponible + iva_importe
+total = subtotal_con_descuento + iva_importe + transporte     ← incorrecto
 ```
 
-**Impacto:** un transporte de 20€ acaba facturado como 20€ neto sin IVA, cuando debería ser 20€ + IVA. En un presupuesto real de Ancora esto es error fiscal.
+La fórmula vigente, implementada en `src/lib/presupuestos/totales.ts`:
 
-**Solución:** corregir en Server Action `actualizarPresupuesto` y en el preview HTML antes del Prompt 7 (PDF real) o como parte del Prompt 7.
+```
+base_imponible = subtotal × (1 − descuento_manual_pct/100) + transporte
+iva_importe    = base_imponible × (iva_pct / 100)
+total          = base_imponible + iva_importe
+```
+
+`subtotal` conserva su significado (suma bruta de líneas, sin descuento ni transporte) y `base_imponible` pasa a ser **columna propia** de `presupuestos`, no un valor recalculado en cada pantalla: así el PDF, el preview y la base de datos no pueden divergir.
+
+**Aplicado con:** migración `supabase/migrations/20260726000000_fix_transporte_iva.sql`, que además recalcula los presupuestos ya existentes (incluidos los emitidos: la inmutabilidad protege los precios pactados, no un error aritmético en el IVA).
 
 ### 13.7. Composición DTF avanzada pendiente obligatoria
 
@@ -969,6 +975,46 @@ En el caso Josefa el hueco lateral de cada fila de espalda (14 cm libres tras un
 
 **Estado de tests:** 208/208 tests siguen passing tras Prompt 6. El wizard usa el motor de cálculo puro y por tanto está indirectamente cubierto por los tests del motor.
 
+### Prompt 7 — PDF real descargable, fix fiscal del transporte y datos fiscales
+
+**Datos fiscales completados.** `src/lib/empresa.ts` ya lleva dirección, código postal, teléfono, IBAN y banco reales. Se añadió el campo `banco` ("LA CAIXA") a `DatosEmpresa`, que no existía. El único `null` que queda es `email` (pendiente 18).
+
+**Decisiones técnicas:**
+
+1. **`base_imponible` es columna, no cálculo derivado.** El enunciado la proponía como opcional; se añade porque es el importe sobre el que tributa el presupuesto y aparece impreso en un documento que ve el cliente. Si cada pantalla la recalculara, un cambio futuro en la fórmula desalinearía el PDF ya archivado respecto a la base de datos. `subtotal` no cambia de significado.
+
+2. **La aritmética de totales sale de la Server Action a `src/lib/presupuestos/totales.ts`.** `calcularTotalesPresupuesto` es una función pura, igual que el motor de `src/lib/calculos/`, y tiene 7 tests propios — incluido el caso del bug (100 € + 20 € de transporte al 21% → base 120 €, IVA 25,20 €, total 145,20 €) y un test de regresión que comprueba que el total ya NO coincide con la fórmula antigua. Sin esto, el fix fiscal no tendría cobertura automática: `recalcularTotales` necesita Supabase y no es testeable sola.
+
+3. **La migración recalcula también los presupuestos ya emitidos.** La inmutabilidad de CLAUDE.md 7.6 protege los precios pactados (subtotal y líneas, que no se tocan), no un error aritmético en el IVA. Un documento con el IVA mal calculado no debe conservarse.
+
+4. **El PDF se genera con el cliente Supabase de quien llama, no con `service_role`.** El enunciado proponía `SUPABASE_SERVICE_ROLE_KEY` para cargar los datos; usar la sesión del usuario es más seguro y más simple, porque RLS ya decide qué presupuestos puede leer y no hace falta un segundo control de acceso dentro de la generación. El `service_role` se reserva para el bucket de Storage, que sí es privado y solo se toca desde el servidor.
+
+5. **Logo placeholder documentado.** No hay ningún asset de marca en el repositorio (ni siquiera carpeta `public/`) y extraer el logo por captura de un PDF antiguo daría un bitmap pixelado en impresión. `src/lib/pdf/logo.tsx` dibuja el mismo disco azul-cyan con la "A" que ya usa el preview HTML, con primitivas de layout en vez de un base64 (`Image` de @react-pdf/renderer solo admite PNG/JPG). Sustituirlo por el logo real es cambiar ese único archivo. Ver pendiente 23.
+
+6. **Ficheros con extensión distinta a la del enunciado.** `logo.tsx` y `generarPDF.tsx` en lugar de `.ts`: ambos construyen árboles de React. Escribirlos con `createElement` para conservar la extensión obligaría a castear el tipo de `renderToBuffer` sin ganar nada.
+
+7. **Nombres y rutas de archivo separados en `src/lib/pdf/nombres.ts`.** `storage.ts` importa el cliente `service_role`, así que no puede acabar en el grafo de un componente de cliente; los botones de descarga solo necesitan el nombre del archivo y lo importan del módulo puro.
+
+8. **Sin políticas RLS de Storage que reconstruyan la relación objeto → presupuesto.** El enunciado pedía que operador pudiera leer solo los PDFs de sus presupuestos, pero eso obligaría a parsear el nombre del archivo dentro de una política SQL. La autorización vive donde ya estaba: el route handler lee el presupuesto con el cliente del usuario y RLS decide. Las políticas del bucket se dejan como defensa en profundidad (lectura para roles conocidos, escritura solo admin).
+
+9. **La RLS actual NO restringe los presupuestos por operador.** Ojo con el checklist del enunciado ("Sonia no puede descargar PDFs de presupuestos de otro operador"): la migración del Prompt 2 dio SELECT sobre **todos** los presupuestos a admin, operador y consulta. Sonia ya puede abrir y previsualizar cualquier presupuesto en la app, así que el PDF se comporta igual. Restringir la descarga habría sido incoherente con el resto de la interfaz. **Si Espe quiere aislamiento por operador, es un cambio de las políticas de `presupuestos`, no del PDF.**
+
+10. **Se sirve el PDF aunque falle Storage.** Si la subida al bucket falla, el route handler devuelve igualmente el PDF generado en memoria y deja `pdf_regeneracion_pendiente = true`. Sonia no se queda sin documento por un problema de infraestructura.
+
+11. **Emitir no se deshace si falla el archivado.** `emitirPresupuesto` cambia el estado, luego archiva. Un fallo de Storage se registra por consola y deja la regeneración pendiente; revertir la emisión sería peor (el presupuesto está bien emitido).
+
+12. **La cabecera de la tabla NO es `fixed`.** Con `fixed` se repetía en todas las páginas, incluida la de condiciones y firma, donde no hay ninguna línea.
+
+13. **Guion ASCII en el importe del descuento del PDF.** Las fuentes estándar de @react-pdf/renderer usan WinAnsi y el signo menos U+2212 no existe ahí: se imprimía en blanco. Verificado glifo a glifo sobre un PDF renderizado — sí están em dash, en dash, `·`, `€`, `×` y las comillas tipográficas; no están U+2212 ni las flechas.
+
+14. **`vitest.config.ts` necesita `oxc.jsx.runtime = "automatic"`.** `tsconfig.json` deja el JSX en `preserve` para que lo transforme Next; el transformador de Vitest (oxc en la v4) no sabe qué hacer con eso y el smoke test del PDF no compilaba.
+
+**Cobertura de tests: 220/220 passing** (208 previos + 7 de `totales.test.ts` + 5 de `PresupuestoPDF.test.ts`). El smoke test del PDF renderiza el documento completo con líneas, extras, descuento y campos opcionales vacíos, y comprueba que el resultado es un PDF válido: es la única red que detecta una prop de estilo no soportada antes de que Sonia pulse "Descargar PDF".
+
+**Pasos manuales pendientes para Alan:**
+1. Aplicar `supabase/migrations/20260726000000_fix_transporte_iva.sql` en el SQL Editor de Supabase.
+2. Ejecutar `npm run setup:storage` para crear el bucket `presupuestos-pdf`.
+
 ---
 
-*Última actualización del documento: julio 2026 tras cierre de Prompt 6.*
+*Última actualización del documento: agosto 2026 tras cierre de Prompt 7.*

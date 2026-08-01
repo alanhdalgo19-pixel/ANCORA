@@ -58,6 +58,7 @@ export async function cargarPresupuestoCompleto(
     presupuesto: {
       ...(presupuesto as Presupuesto),
       subtotal: num(presupuesto.subtotal),
+      base_imponible: num(presupuesto.base_imponible),
       iva_pct: num(presupuesto.iva_pct),
       iva_importe: num(presupuesto.iva_importe),
       total: num(presupuesto.total),

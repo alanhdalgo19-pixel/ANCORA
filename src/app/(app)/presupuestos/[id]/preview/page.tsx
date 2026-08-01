@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { cargarPresupuestoCompleto } from "@/lib/presupuestos/cargar-presupuesto";
+import { BotonDescargarPDF } from "@/components/presupuestos/BotonDescargarPDF";
 import { PresupuestoPreview } from "@/components/presupuestos/PresupuestoPreview";
 
 export default async function PreviewPresupuestoPage({
@@ -23,9 +24,12 @@ export default async function PreviewPresupuestoPage({
         >
           ← Volver al presupuesto
         </Link>
-        <p className="text-xs text-muted-foreground">
-          Vista previa. La descarga en PDF llega en la siguiente entrega.
-        </p>
+        <BotonDescargarPDF
+          presupuestoId={params.id}
+          numero={datos.presupuesto.numero}
+          estado={datos.presupuesto.estado}
+          size="sm"
+        />
       </div>
 
       <PresupuestoPreview

@@ -13,7 +13,8 @@
     "seed:users": "node scripts/seed_users.mjs",
     "seed:clientes": "node scripts/seed_clientes.mjs",
     "seed:admin": "node scripts/seed_admin_data.mjs",
-    "patch:margenes": "node scripts/patch_margenes.mjs"
+    "patch:margenes": "node scripts/patch_margenes.mjs",
+    "setup:storage": "node scripts/setup_storage_bucket.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

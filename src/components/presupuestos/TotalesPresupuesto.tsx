@@ -4,6 +4,7 @@ interface TotalesPresupuestoProps {
   subtotal: number;
   descuentoManualPct: number;
   transporte: number;
+  baseImponible: number;
   ivaPct: number;
   ivaImporte: number;
   total: number;
@@ -30,34 +31,42 @@ function Linea({
   );
 }
 
-/** Bloque de totales: subtotal → descuento → transporte → IVA → TOTAL. */
+/**
+ * Desglose de totales: subtotal → descuento → transporte → base imponible →
+ * IVA → TOTAL.
+ *
+ * El transporte va ANTES de la base imponible porque forma parte de ella
+ * (CLAUDE.md 13.6, corregido en el Prompt 7). La base imponible se pinta
+ * siempre, aunque no haya descuento ni transporte, para que el orden de
+ * lectura del documento sea el mismo en todos los presupuestos.
+ */
 export function TotalesPresupuesto({
   subtotal,
   descuentoManualPct,
   transporte,
+  baseImponible,
   ivaPct,
   ivaImporte,
   total,
 }: TotalesPresupuestoProps) {
   const descuentoImporte = (subtotal * descuentoManualPct) / 100;
-  const base = subtotal - descuentoImporte;
 
   return (
     <div className="ml-auto w-full max-w-xs">
-      <Linea etiqueta="Subtotal" valor={formatEuros(subtotal)} />
+      <Linea etiqueta="Subtotal líneas" valor={formatEuros(subtotal)} />
       {descuentoManualPct > 0 && (
-        <>
-          <Linea
-            etiqueta={`Descuento (${descuentoManualPct}%)`}
-            valor={`− ${formatEuros(descuentoImporte)}`}
-            matiz
-          />
-          <Linea etiqueta="Base imponible" valor={formatEuros(base)} matiz />
-        </>
+        <Linea
+          etiqueta={`Descuento (${descuentoManualPct}%)`}
+          valor={`− ${formatEuros(descuentoImporte)}`}
+          matiz
+        />
       )}
       {transporte > 0 && (
         <Linea etiqueta="Transporte" valor={formatEuros(transporte)} matiz />
       )}
+      <div className="border-t border-border">
+        <Linea etiqueta="Base imponible" valor={formatEuros(baseImponible)} />
+      </div>
       <Linea etiqueta={`IVA (${ivaPct}%)`} valor={formatEuros(ivaImporte)} />
       <div className="mt-2 flex items-center justify-between border-t border-border pt-3">
         <span className="text-sm font-semibold text-foreground">TOTAL</span>

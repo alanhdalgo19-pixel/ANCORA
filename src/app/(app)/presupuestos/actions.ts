@@ -8,6 +8,8 @@ import {
   PRIMER_NUMERO_2026,
 } from "@/lib/empresa";
 import { hoyISO, sumarDiasISO } from "@/lib/format";
+import { generarYArchivarPDF } from "@/lib/pdf/generarPDF";
+import { calcularTotalesPresupuesto } from "@/lib/presupuestos/totales";
 import {
   calcularLinea,
   ErrorCalculo,
@@ -112,9 +114,13 @@ async function siguienteNumero(
 // ---------------------------------------------------------------------------
 
 /**
- * Recalcula subtotal, IVA y total a partir de las líneas guardadas.
- * `subtotal` es la suma bruta de líneas; el descuento manual se aplica encima,
- * y el transporte se suma después del IVA porque no lo lleva.
+ * Recalcula subtotal, base imponible, IVA y total a partir de las líneas.
+ *
+ * `subtotal` es la suma bruta de líneas (sin descuento y sin transporte). El
+ * descuento manual se aplica encima y el transporte se suma DENTRO de la base
+ * imponible: es una entrega accesoria y tributa al mismo tipo que el resto del
+ * presupuesto. Corregido en el Prompt 7; ver CLAUDE.md sección 13.6 para el
+ * bug original.
  */
 async function recalcularTotales(
   supabase: SupabaseServerClient,
@@ -134,19 +140,24 @@ async function recalcularTotales(
 
   if (!presupuesto) return;
 
-  const subtotal = redondear2(
-    (lineas ?? []).reduce((suma, linea) => suma + Number(linea.importe_linea), 0),
-  );
-  const descuentoPct = Number(presupuesto.descuento_manual_pct) || 0;
-  const base = redondear2(subtotal * (1 - descuentoPct / 100));
-  const ivaImporte = redondear2(base * (Number(presupuesto.iva_pct) / 100));
-  const total = redondear2(
-    base + ivaImporte + (Number(presupuesto.transporte) || 0),
-  );
+  const totales = calcularTotalesPresupuesto({
+    subtotal: (lineas ?? []).reduce(
+      (suma, linea) => suma + Number(linea.importe_linea),
+      0,
+    ),
+    descuentoPct: Number(presupuesto.descuento_manual_pct) || 0,
+    transporte: Number(presupuesto.transporte) || 0,
+    ivaPct: Number(presupuesto.iva_pct) || 0,
+  });
 
   await supabase
     .from("presupuestos")
-    .update({ subtotal, iva_importe: ivaImporte, total })
+    .update({
+      subtotal: totales.subtotal,
+      base_imponible: totales.baseImponible,
+      iva_importe: totales.ivaImporte,
+      total: totales.total,
+    })
     .eq("id", presupuestoId);
 }
 
@@ -651,6 +662,22 @@ export async function emitirPresupuesto(
     .eq("id", presupuestoId);
 
   if (error) return fallo("No se ha podido emitir el presupuesto.");
+
+  // El PDF se archiva AQUÍ, con el estado ya en 'enviado', porque a partir de
+  // ahora el presupuesto es inmutable (CLAUDE.md 7.6): este archivo es el
+  // documento que se envía al cliente y el que se sirve en cada descarga.
+  //
+  // Si falla el archivado no se deshace la emisión: el presupuesto está bien
+  // emitido y `generarYArchivarPDF` ya deja marcada la regeneración pendiente,
+  // así que la primera descarga lo reconstruye. Solo se avisa por consola.
+  const archivado = await generarYArchivarPDF(supabase, presupuestoId);
+  if (!archivado.ok) {
+    console.error(
+      "[presupuestos] No se ha podido archivar el PDF de",
+      presupuestoId,
+      archivado.error,
+    );
+  }
 
   revalidatePath(`/presupuestos/${presupuestoId}`);
   revalidatePath("/presupuestos");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Copy, Send, ThumbsDown, ThumbsUp } from "lucide-react";
 import {
@@ -9,10 +10,12 @@ import {
   emitirPresupuesto,
 } from "@/app/(app)/presupuestos/actions";
 import { Button } from "@/components/ui/button";
+import { nombreArchivoPDF } from "@/lib/pdf/nombres";
 import type { EstadoPresupuesto, Rol } from "@/types/database";
 
 interface Props {
   presupuestoId: string;
+  numero: string;
   estado: EstadoPresupuesto;
   tieneLineas: boolean;
   rol: Rol;
@@ -20,6 +23,7 @@ interface Props {
 
 export function AccionesPresupuesto({
   presupuestoId,
+  numero,
   estado,
   tieneLineas,
   rol,
@@ -28,16 +32,20 @@ export function AccionesPresupuesto({
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
+  // Solo para ofrecer la descarga inmediata tras emitir; el botón permanente
+  // de descarga vive en la cabecera de la página.
+  const [recienEmitido, setRecienEmitido] = useState(false);
 
   const esAdmin = rol === "admin";
 
   async function ejecutar(
     accion: () => Promise<{ ok: boolean; error?: string }>,
     confirmacion?: string,
-  ) {
+  ): Promise<boolean> {
     setError(null);
     setMensaje(null);
-    if (confirmacion && !window.confirm(confirmacion)) return;
+    setRecienEmitido(false);
+    if (confirmacion && !window.confirm(confirmacion)) return false;
 
     setOcupado(true);
     const resultado = await accion();
@@ -45,17 +53,21 @@ export function AccionesPresupuesto({
 
     if (!resultado.ok) {
       setError(resultado.error ?? "No se ha podido completar la acción.");
-      return;
+      return false;
     }
     router.refresh();
+    return true;
   }
 
   async function emitir() {
-    await ejecutar(
+    const correcto = await ejecutar(
       () => emitirPresupuesto(presupuestoId),
       "Al emitirlo, el presupuesto deja de ser editable. ¿Continuar?",
     );
-    setMensaje("Presupuesto emitido.");
+    if (!correcto) return;
+
+    setMensaje("Presupuesto emitido y archivado.");
+    setRecienEmitido(true);
   }
 
   async function duplicar() {
@@ -139,7 +151,24 @@ export function AccionesPresupuesto({
           administrador.
         </p>
       )}
-      {mensaje && <p className="text-sm text-success">{mensaje}</p>}
+      {mensaje && (
+        <p className="text-sm text-success">
+          {mensaje}
+          {recienEmitido && (
+            <>
+              {" "}
+              <Link
+                href={`/api/presupuestos/${presupuestoId}/pdf`}
+                prefetch={false}
+                download={nombreArchivoPDF(numero)}
+                className="font-medium underline underline-offset-2"
+              >
+                Descargar el PDF ahora
+              </Link>
+            </>
+          )}
+        </p>
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );

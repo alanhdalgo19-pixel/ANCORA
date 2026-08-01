@@ -188,7 +188,10 @@ export interface Presupuesto {
   fecha_emision: string;
   fecha_validez: string;
   estado: EstadoPresupuesto;
+  /** Suma bruta de líneas: sin descuento manual y sin transporte. */
   subtotal: number;
+  /** subtotal − descuento + transporte. Base sobre la que se calcula el IVA. */
+  base_imponible: number;
   iva_pct: number;
   iva_importe: number;
   total: number;
@@ -198,6 +201,9 @@ export interface Presupuesto {
   created_at: string;
   sent_at: string | null;
   accepted_at: string | null;
+  /** Ruta en el bucket `presupuestos-pdf`; null mientras sea borrador. */
+  pdf_storage_path: string | null;
+  pdf_regeneracion_pendiente: boolean;
 }
 
 export interface LineaPresupuesto {

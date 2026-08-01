@@ -1,8 +1,10 @@
 // Datos fiscales de Ancora y textos fijos del presupuesto (CLAUDE.md 1 y 7.9).
 //
-// Los campos a `null` son datos que todavía no tenemos confirmados. El preview
-// los muestra como "PENDIENTE" y avisa arriba, en vez de inventarlos: acaban en
-// un documento que ve el cliente. Ver CLAUDE.md sección 10 (pendientes).
+// Confirmados por el usuario en el Prompt 7 a partir de los presupuestos
+// históricos de Ancora. El único campo que sigue a `null` es el email: no está
+// confirmado con Espe y, al ser opcional en un presupuesto, la línea
+// simplemente se omite del documento en vez de imprimir un "PENDIENTE" que
+// acabaría delante del cliente. Ver CLAUDE.md sección 10 (pendientes).
 
 export interface DatosEmpresa {
   razon_social: string;
@@ -15,28 +17,38 @@ export interface DatosEmpresa {
   telefono: string | null;
   email: string | null;
   iban: string | null;
+  banco: string | null;
 }
 
 export const EMPRESA: DatosEmpresa = {
   razon_social: "Andes Publicitat, S.L.",
   nombre_comercial: "Ancora Publicitat",
   nif: "B57326928",
-  direccion: null,
-  codigo_postal: null,
+  direccion: "C/ Blatera 37 B",
+  codigo_postal: "07198",
   localidad: "Son Ferriol",
   provincia: "Illes Balears",
-  telefono: null,
+  telefono: "971 428 072",
+  // PENDIENTE: confirmar con Espe el email de contacto comercial de Ancora.
+  // Mientras sea null, la línea no aparece ni en el preview ni en el PDF.
   email: null,
-  iban: null,
+  iban: "ES84 2100 6328 9513 0008 6685",
+  banco: "LA CAIXA",
 };
 
-/** Campos de `EMPRESA` que aún faltan, para el aviso del preview. */
+/**
+ * Campos obligatorios de `EMPRESA` que aún faltan, para el aviso del preview.
+ *
+ * El email queda fuera a propósito: es opcional en un presupuesto y su ausencia
+ * no invalida el documento, así que no debe disparar el aviso ámbar. Los demás
+ * campos sí son fiscalmente necesarios; la función se mantiene por si alguno
+ * volviera a quedarse vacío en el futuro.
+ */
 export function datosEmpresaPendientes(): string[] {
   const pendientes: string[] = [];
   if (!EMPRESA.direccion) pendientes.push("dirección");
   if (!EMPRESA.codigo_postal) pendientes.push("código postal");
   if (!EMPRESA.telefono) pendientes.push("teléfono");
-  if (!EMPRESA.email) pendientes.push("email");
   if (!EMPRESA.iban) pendientes.push("IBAN");
   return pendientes;
 }

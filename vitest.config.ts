@@ -10,6 +10,13 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // `tsconfig.json` deja el JSX en `preserve` para que lo transforme Next.
+  // esbuild (el transformador de Vitest) no sabe qué hacer con eso, así que
+  // aquí se le indica la transformación automática: la necesita el smoke test
+  // del PDF, que importa el componente `PresupuestoPDF.tsx`.
+  oxc: {
+    jsx: { runtime: "automatic" },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BotonDescargarPDF } from "@/components/presupuestos/BotonDescargarPDF";
 import { BotonDuplicar } from "@/components/presupuestos/BotonDuplicar";
 import { EstadoBadge } from "@/components/presupuestos/EstadoBadge";
 import { formatEuros, formatFecha } from "@/lib/format";
@@ -257,6 +258,18 @@ export default async function PresupuestosPage({
                             Ver
                           </Link>
                         </Button>
+                        {/* Los borradores todavía cambian: su PDF se descarga
+                            desde la ficha, donde se ve que es provisional. */}
+                        {presupuesto.estado !== "borrador" && (
+                          <BotonDescargarPDF
+                            presupuestoId={presupuesto.id}
+                            numero={presupuesto.numero}
+                            estado={presupuesto.estado as EstadoPresupuesto}
+                            variant="ghost"
+                            size="sm"
+                            soloIcono
+                          />
+                        )}
                         <BotonDuplicar presupuestoId={presupuesto.id} />
                       </div>
                     </TableCell>

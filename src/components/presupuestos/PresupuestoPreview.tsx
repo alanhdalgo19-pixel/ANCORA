@@ -47,7 +47,6 @@ export function PresupuestoPreview({
   const descuentoImporte =
     (Number(presupuesto.subtotal) * Number(presupuesto.descuento_manual_pct)) /
     100;
-  const base = Number(presupuesto.subtotal) - descuentoImporte;
 
   return (
     <div className="space-y-4">
@@ -129,7 +128,8 @@ export function PresupuestoPreview({
               {EMPRESA.provincia})
             </Dato>
             <Dato>Tel.: {EMPRESA.telefono ?? <ValorPendiente />}</Dato>
-            <Dato>{EMPRESA.email ?? <ValorPendiente />}</Dato>
+            {/* El email es opcional: si no está, la línea no aparece. */}
+            {EMPRESA.email && <Dato>{EMPRESA.email}</Dato>}
           </div>
 
           <div>
@@ -243,29 +243,29 @@ export function PresupuestoPreview({
         <section className="flex justify-end border-t border-[#e0e0e0] pt-4">
           <dl className="w-64 text-[13px]">
             <div className="flex justify-between py-1">
-              <dt className="text-[#5a5a5a]">Subtotal</dt>
+              <dt className="text-[#5a5a5a]">Subtotal líneas</dt>
               <dd>{formatEuros(presupuesto.subtotal)}</dd>
             </div>
             {Number(presupuesto.descuento_manual_pct) > 0 && (
-              <>
-                <div className="flex justify-between py-1">
-                  <dt className="text-[#5a5a5a]">
-                    Descuento ({presupuesto.descuento_manual_pct}%)
-                  </dt>
-                  <dd>− {formatEuros(descuentoImporte)}</dd>
-                </div>
-                <div className="flex justify-between py-1">
-                  <dt className="text-[#5a5a5a]">Base imponible</dt>
-                  <dd>{formatEuros(base)}</dd>
-                </div>
-              </>
+              <div className="flex justify-between py-1">
+                <dt className="text-[#5a5a5a]">
+                  Descuento ({presupuesto.descuento_manual_pct}%)
+                </dt>
+                <dd>− {formatEuros(descuentoImporte)}</dd>
+              </div>
             )}
+            {/* El transporte va antes de la base imponible: forma parte de
+                ella y tributa al mismo tipo (CLAUDE.md 13.6). */}
             {Number(presupuesto.transporte) > 0 && (
               <div className="flex justify-between py-1">
                 <dt className="text-[#5a5a5a]">Transporte</dt>
                 <dd>{formatEuros(presupuesto.transporte)}</dd>
               </div>
             )}
+            <div className="flex justify-between border-t border-[#e0e0e0] py-1 pt-2">
+              <dt className="text-[#5a5a5a]">Base imponible</dt>
+              <dd>{formatEuros(presupuesto.base_imponible)}</dd>
+            </div>
             <div className="flex justify-between py-1">
               <dt className="text-[#5a5a5a]">IVA ({presupuesto.iva_pct}%)</dt>
               <dd>{formatEuros(presupuesto.iva_importe)}</dd>
@@ -299,7 +299,8 @@ export function PresupuestoPreview({
             </h2>
             <p className="text-[12px] text-[#5a5a5a]">{FORMA_PAGO_RESUMEN}</p>
             <p className="mt-1 text-[12px] text-[#5a5a5a]">
-              Transferencia a IBAN: {EMPRESA.iban ?? <ValorPendiente />}
+              Transferencia{EMPRESA.banco ? ` (${EMPRESA.banco})` : ""} a IBAN:{" "}
+              {EMPRESA.iban ?? <ValorPendiente />}
             </p>
             {cliente.condiciones_pago && (
               <p className="mt-1 text-[12px] text-[#5a5a5a]">

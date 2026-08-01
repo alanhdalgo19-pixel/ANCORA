@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { TipoClienteBadge } from "@/components/clientes/TipoClienteBadge";
 import { AccionesPresupuesto } from "@/components/presupuestos/AccionesPresupuesto";
 import { AjustesPresupuestoForm } from "@/components/presupuestos/AjustesPresupuestoForm";
+import { BotonDescargarPDF } from "@/components/presupuestos/BotonDescargarPDF";
 import { EstadoBadge } from "@/components/presupuestos/EstadoBadge";
 import { PresupuestoPreview } from "@/components/presupuestos/PresupuestoPreview";
 import { PreviewModal } from "@/components/presupuestos/PreviewModal";
@@ -89,6 +90,13 @@ export default async function PresupuestoPage({ params }: Props) {
                 lineas={lineas}
               />
             </PreviewModal>
+            {tieneLineas && (
+              <BotonDescargarPDF
+                presupuestoId={presupuesto.id}
+                numero={presupuesto.numero}
+                estado={presupuesto.estado}
+              />
+            )}
             <Button asChild variant="ghost">
               <Link href={`/presupuestos/${presupuesto.id}/preview`}>
                 Abrir en pantalla completa
@@ -126,6 +134,7 @@ export default async function PresupuestoPage({ params }: Props) {
             subtotal={presupuesto.subtotal}
             descuentoManualPct={presupuesto.descuento_manual_pct}
             transporte={presupuesto.transporte}
+            baseImponible={presupuesto.base_imponible}
             ivaPct={presupuesto.iva_pct}
             ivaImporte={presupuesto.iva_importe}
             total={presupuesto.total}
@@ -162,6 +171,7 @@ export default async function PresupuestoPage({ params }: Props) {
           <h2 className="text-lg font-medium text-foreground">Acciones</h2>
           <AccionesPresupuesto
             presupuestoId={presupuesto.id}
+            numero={presupuesto.numero}
             estado={presupuesto.estado}
             tieneLineas={tieneLineas}
             rol={rol ?? "consulta"}
