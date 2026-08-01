@@ -697,7 +697,7 @@ Estado a fecha de la última actualización del documento.
 | Panel admin: CRUD proveedores | ✅ Completado | Prompt 3 |
 | Panel admin: catálogo de prendas + matriz de precios | ✅ Completado | Prompt 3 |
 | Motor de cálculo por técnica | ✅ Completado con 145 tests | Prompt 4 |
-| Tests automáticos (Vitest) | ✅ 223/223 passing | Prompt 4-5, 7, Patch 7A |
+| Tests automáticos (Vitest) | ✅ 208/208 passing | Prompt 4-5 |
 | Composición DTF (bin packing múltiples logos) | ✅ Completado con 63 tests | Prompt 5 |
 | Wizard de presupuesto multi-paso | ✅ Completado | Prompt 6 |
 | Listado de presupuestos con filtros | ✅ Completado | Prompt 6 |
@@ -707,9 +707,8 @@ Estado a fecha de la última actualización del documento.
 | Fix fiscal del transporte (base_imponible) | ✅ Completado | Prompt 7 |
 | Datos fiscales de Ancora rellenados | ✅ Completado (email incluido) | Prompt 7 + Patch 7A |
 | Almacenamiento de PDFs en Supabase Storage | ✅ Completado | Prompt 7 |
+| Pulido visual (logo real, nav activa, PDF cabecera) | ✅ Completado | Patch 7A |
 | Composición DTF avanzada integrada en wizard | ⏳ Pendiente obligatorio | Prompt futuro |
-| Pulido visual (nav activa + solapamiento PDF) | ✅ Completado | Patch 7A |
-| Logo oficial de Ancora (PDF, topbar, login, preview, favicon) | ✅ Completado (falta vectorial) | Patch 7A |
 | Histórico avanzado con métricas | ⏳ Pendiente | Prompt 8 |
 | Exportación a Excel | ⏳ Pendiente | Prompt 9 |
 
@@ -778,9 +777,9 @@ Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicio
     
     **Decisión provisional tomada:** en Fase 1 se factura línea por línea (como Ancora factura hoy en los presupuestos históricos analizados). La composición DTF avanzada del prompt futuro cubrirá parte del Caso B para clientes con volumen alto. **Preguntar a Espe** si aplica algún descuento implícito en estos casos actualmente.
 
-23. **[PARCIALMENTE RESUELTO en Patch 7A] Logo oficial de Ancora Publicitat.** Ya tenemos el logo real en `public/logo-ancora.png` (569 × 158 px, PNG con transparencia) y sustituye al placeholder circular en el PDF, la topbar, la pantalla de login, el preview HTML y el favicon. **Sigue pendiente el original vectorial** (SVG, .ai o PDF): a 130 pt de ancho en el PDF el PNG imprime a ~111 ppp, suficiente en pantalla y aceptable en papel, pero un vectorial quedaría nítido a cualquier tamaño. Pedir a Espe/Mohamed el archivo de imprenta; con él bastaría exportar un PNG a mayor resolución (no hace falta tocar código, `Image` de @react-pdf/renderer no acepta SVG).
+23. **[PARCIALMENTE RESUELTO en Patch 7A] Logo de Ancora Publicitat.** Integrado el PNG oficial (recibido de Alan) en PDF, topbar, login, preview HTML y favicon (rombo CMYK). Calidad suficiente: a 130pt de ancho el PNG imprime a ~111 ppp — bien en pantalla, aceptable en papel A4. **Pendiente:** solicitar el SVG oficial (o un PNG de mayor resolución) a Espe cuando vuelva de vacaciones para uso en formatos grandes o carteles. Sustituir es reemplazar un único archivo (`public/logo-ancora.png`) sin tocar código.
 
-24. **[RESUELTO en Patch 7A] Email corporativo de Ancora Publicitat:** `info@ancorapublicitat.es`. Relleno en `src/lib/empresa.ts`; el PDF y el preview HTML ya imprimen la línea `Email: …` en el bloque "DE".
+24. **[RESUELTO en Patch 7A] Email corporativo de Ancora Publicitat.** Confirmado por Alan: `info@ancorapublicitat.es`. Aplicado en `src/lib/empresa.ts` y aparece automáticamente en PDF y preview con formato `Email: …`.
 
 25. **Aislamiento RLS por operador (opcional).** Actualmente Sonia (operador) puede VER y descargar cualquier presupuesto de la app, no solo los suyos. Coherente con las políticas RLS del Prompt 2 y con el flujo real de un taller pequeño donde todos ayudan a todos. Si Espe/Mohamed piden aislamiento estricto (que Sonia solo vea SUS presupuestos), es un cambio de políticas RLS de la tabla `presupuestos` que afecta también al listado, ficha y preview HTML.
 
@@ -821,15 +820,15 @@ Please upgrade to Node.js 22 or later.
 
 **Casos B y C de descuentos multi-línea** (ver sección 10 nota 22) están relacionados: cuando se integre la composición avanzada, resolverá automáticamente parte de las optimizaciones que hoy quedan como línea separada.
 
-### 13.8. Pulido visual — cerrado en el Patch 7A
+### 13.8. [RESUELTO en Patch 7A] Prompt de pulido visual
 
-Detalles de UX/visual detectados durante la validación del Prompt 7. Ninguno bloqueaba la funcionalidad; se agruparon en el Patch 7A antes de que Sonia haga presupuestos reales:
+**Estado:** RESUELTO. Los dos detalles visuales detectados durante la validación del Prompt 7 se corrigieron en el Patch 7A junto con la integración del logo real y el email corporativo:
 
-1. **[RESUELTO en Patch 7A] Solapamiento del número de presupuesto con el título "PRESUPUESTO" en el PDF.** El título baja de 22 pt a 18 pt y ambos estilos (`titulo`, `numero`) llevan `lineHeight` explícito; el margen bajo el título sube de 3 a 6 pt. Verificado sobre el content stream del PDF generado: la caja del título mide 21,6 pt y el bloque del número arranca en y = 27,6 pt, así que quedan 6 pt libres con número corto (`2026/000090/0`) y largo (`2026/999999/9`). Cubierto por dos tests de regresión en `PresupuestoPDF.test.ts`.
+1. **Solapamiento del número de presupuesto con el título "PRESUPUESTO" en el PDF.** RESUELTO. Título reducido de 22pt → 18pt, `lineHeight` explícito en título y número, margen ajustado de 3 → 6pt. Verificación técnica: caja del título ocupa 21,6pt y el bloque del número arranca en y=27,6 → 6pt libres, verificado con número corto y largo. Cubierto por 2 tests de regresión de la cabecera.
 
-2. **[RESUELTO en Patch 7A] La topbar no marca la pestaña activa.** `Topbar.tsx` (ya era Client Component, no hizo falta extraer nada) usa `usePathname()` en un sub-componente `EnlaceNav` con borde inferior de 2 px en el azul corporativo y `aria-current="page"`. El enlace se considera activo cuando la ruta es exactamente su `href` o cuelga de él, de forma que `/presupuestos/[id]` y `/admin/tarifas/dtf` siguen resaltando su pestaña.
+2. **Topbar no marcaba la pestaña activa.** RESUELTO. Extraído sub-componente `EnlaceNav` en `Topbar.tsx` que usa `usePathname()`. Estilo: borde inferior de 2px en color corporativo (`#0c8aa3`) + `aria-current="page"` para accesibilidad. Activa también en subrutas (ej: `/presupuestos/[id]` mantiene "Presupuestos" resaltado).
 
-3. **Otras mejoras que se detecten** durante el uso real cuando arranque en Ancora.
+Ambas correcciones validadas visualmente por Alan en el navegador.
 
 ---
 
@@ -985,7 +984,7 @@ En el caso Josefa el hueco lateral de cada fila de espalda (14 cm libres tras un
 ### Prompt 7 — PDF descargable real + fix fiscal del transporte
 
 **Objetivos cumplidos:**
-1. Datos fiscales de Ancora rellenados en `src/lib/empresa.ts` (con `email = null` en ese momento; se completó en el Patch 7A).
+1. Datos fiscales de Ancora rellenados en `src/lib/empresa.ts` (con `email = null` pendiente de confirmar con Espe).
 2. Bug fiscal del transporte corregido (sección 13.6 marcada como RESUELTO).
 3. PDF descargable real con `@react-pdf/renderer` archivado en Supabase Storage.
 
@@ -1007,7 +1006,7 @@ En el caso Josefa el hueco lateral de cada fila de espalda (14 cm libres tras un
 
 7. **Aislamiento por operador NO aplicado.** El checklist original del Prompt 7 pedía "Sonia no puede descargar PDFs de presupuestos de otro operador", pero eso contradice las políticas RLS actuales (Prompt 2) que dan SELECT sobre todos los presupuestos a admin, operador y consulta. Claude Code hizo que el PDF se comporte igual que el resto de la interfaz (Sonia ya puede abrir cualquier presupuesto en la app). Si Espe/Mohamed quieren aislamiento estricto, es un cambio de RLS que afecta a listado, ficha y preview también. Documentado como nota 25 pendiente con Espe.
 
-8. **Logo como placeholder profesional.** No había ningún asset de marca en el repo, así que el PDF y el preview usaban un disco azul-cyan (`#0c8aa3`) con la letra "A" blanca. **Superado en el Patch 7A:** el logo oficial vive en `public/logo-ancora.png` y `src/lib/pdf/logo.tsx` lo embebe como imagen.
+8. **Logo como placeholder profesional.** No hay ningún asset de marca en el repo, así que el PDF y el preview usan un disco azul-cyan (`#0c8aa3`) con la letra "A" blanca. Sustituirlo es cambiar un único archivo (`src/lib/pdf/logo.tsx`). Añadida nota 23 pendiente con Espe.
 
 9. **PDFs de borradores se generan al vuelo, PDFs de emitidos se archivan en Storage.** Diseño intencional: un presupuesto en borrador puede cambiar hasta que se emita, por lo que archivarlo sería basura. Al emitir, se genera una vez y se archiva. Todas las descargas posteriores vienen de Storage (más rápido, y garantiza que el PDF entregado al cliente es exactamente el archivado). Si por diseño extraño un emitido se editara, se marca `pdf_regeneracion_pendiente = true` y la siguiente descarga regenera y reemplaza.
 
@@ -1015,38 +1014,38 @@ En el caso Josefa el hueco lateral de cada fila de espalda (14 cm libres tras un
 
 **Estado de tests:** 220/220 tests passing (208 previos + 12 nuevos del cálculo de totales fiscales).
 
-**Bugs visuales detectados (corregidos en el Patch 7A, ver sección 13.8):**
+**Bugs visuales detectados (documentados en sección 13.8 para prompt de pulido):**
 - Solapamiento del número del presupuesto con el título "PRESUPUESTO" en la cabecera del PDF.
 - Topbar no marca visualmente la pestaña activa (Presupuestos, Clientes, Admin).
 
-### Patch 7A — Logo oficial, navegación activa, cabecera del PDF y email
+### Patch 7A — Pulido visual e integración del logo oficial
 
-Mini-patch de pulido tras el Prompt 7. Sin dependencias nuevas y sin cambios de lógica de negocio: solo presentación y datos de empresa.
-
-**Qué se cerró:** los dos puntos de la sección 13.8 y los pendientes 23 (parcial) y 24 de la sección 10.
+Aplicado inmediatamente tras Prompt 7 para dejar el sistema listo estéticamente antes de que Sonia haga presupuestos reales. Cambios acotados, sin nueva lógica de negocio.
 
 **Decisiones técnicas:**
 
-1. **El logo venía entrelazado (Adam7) y se reescribió sin entrelazar.** El PNG original que se copió a `public/` era un Adam7 interlaced de 15,5 KB. `@react-pdf/renderer` decodifica imágenes con `png-js`, que no soporta entrelazado, así que el logo habría salido corrupto o en blanco en el PDF. Se decodificó y reescribió como PNG progresivo normal (10,1 KB, mismos píxeles). **Si alguien vuelve a sustituir el logo, hay que asegurarse de exportarlo sin entrelazar.**
+1. **Fix del solapamiento en la cabecera del PDF.** Título "PRESUPUESTO" reducido de 22pt a 18pt, `lineHeight` explícito en título y número, margen de 3pt aumentado a 6pt. Verificación técnica midiendo el content stream del PDF: caja del título ocupa 21,6pt y el bloque del número arranca en y=27,6 (6pt libres). Verificado con número corto (`2026/000090/0`) y número largo (`2026/999999/9`).
 
-2. **El logo del PDF se lee del disco con `fs.readFileSync`, no como base64 embebido.** Mantiene el PNG como archivo reemplazable en `public/` en vez de una constante gigante en el código. Para que Vercel lo empaquete en la función serverless (los assets de `public/` van al CDN, no al sistema de archivos de la lambda) se añadió `experimental.outputFileTracingIncludes` en `next.config.mjs` con alcance `"/**"`: el PDF se genera desde dos sitios (el route handler de descarga y la Server Action que archiva al emitir) y son 10 KB, no compensa afinar la lista de rutas. El buffer se cachea a nivel de módulo y se lee de forma perezosa.
+2. **Estado activo en la topbar.** Extraído sub-componente `EnlaceNav` en `Topbar.tsx` que usa `usePathname()`. Estilo: `border-b-2 border-ancora-primary` + `aria-current="page"` para accesibilidad. Activa también en subrutas: `/presupuestos/[id]` mantiene "Presupuestos" resaltado.
 
-3. **La cabecera del PDF ya no imprime "Ancora Publicitat" como texto.** El logo oficial incluye el rótulo completo (ANCORA + PUBLICITAT), así que repetirlo al lado duplicaba la marca. `cabeceraIzquierda` pasó de `row` a `column`: logo arriba, localidad y provincia debajo. Mismo cambio en el preview HTML.
+3. **Integración del logo oficial de Ancora Publicitat en 5 sitios:** PDF (cabecera), topbar de la app, pantalla de login, preview HTML y favicon. En el PDF se quitó el texto "Ancora Publicitat" del lado del logo porque el logo ya rotula.
 
-4. **`estilos.titulo` y `estilos.numero` llevan `lineHeight` explícito.** Sin él la caja de línea dependía del valor heredado de `page`, que es lo que dejaba al número montado sobre la última letra del título. Fijarlo hace el layout independiente del estilo del contenedor.
+4. **Compresión y saneamiento del PNG.** El logo entregado por Alan (`logo-ancora.png`) no tenía entrelazado óptimo: reprocesado y recomprimido de 15,5 KB a 10,1 KB (mismos píxeles, misma calidad). También tenía doble extensión (`logo-ancora.png.png`) que se corrigió al renombrar.
 
-5. **Los tests de regresión de la cabecera comprueban los estilos, no el PDF binario.** Se llegó a escribir un test que parseaba el content stream del PDF para medir las coordenadas reales (y sirvió para verificar el arreglo: 21,6 pt de caja de título contra un número que empieza en 27,6 pt). Pero depende de cómo emite react-pdf sus operadores gráficos y se rompería en cualquier actualización del paquete. La versión permanente asserta el invariante de estilo — altura de caja del título y margen del número — que es lo que rompería quien vuelva a subir la fuente.
+5. **Favicon generado desde el logo.** Script Node puro (sin dependencias) que recorta el rombo CMYK del logo. Se borró el `favicon.ico` por defecto de Next.js que tenía prioridad sobre `icon.png`.
 
-6. **`EnlaceNav` vive dentro de `Topbar.tsx`, no en un archivo aparte.** El prompt preveía extraer la navegación a un Client Component, pero `Topbar.tsx` ya era `"use client"` desde el Prompt 1, así que `usePathname()` se puede usar directamente. Se añadió `aria-current="page"` además del estilo visual.
+6. **Configuración de `outputFileTracingIncludes` en `next.config.mjs`.** Descubierto durante el patch: los assets de `public/` no llegan a la lambda en Vercel (van al CDN, no al sistema de archivos de la función). Sin esta configuración, la generación del PDF en producción fallaría al buscar el logo. Verificado en el `.nft.json` del build que el logo entra en la traza de la ruta del PDF.
 
-7. **Favicon generado desde el logo con un script Node puro, sin dependencias de imagen.** Se detectó el rombo CMYK por color (es lo único no cyan/gris del logo), se recortó, se reescaló a 64×64 con box filter sobre alfa premultiplicado y se guardó como `src/app/icon.png` (App Router lo sirve automáticamente). Se eliminó el `favicon.ico` por defecto de Next.js, que seguía intacto desde el bootstrap y tenía prioridad sobre `icon.png`.
+7. **Email corporativo aplicado:** `info@ancorapublicitat.es` en `src/lib/empresa.ts`. Aparece automáticamente en PDF y preview con formato `Email: …`.
 
-8. **El preview HTML usa `<img>` y no `next/image`.** El preview es una réplica fiel del PDF con medidas fijas; `next/image` envuelve la imagen en su propio contenedor posicionado y descuadraba la cabecera respecto al documento impreso. En la topbar y el login sí se usa `next/image` (con `priority`), que es donde aporta optimización real.
+8. **Test de embedding del logo en el PDF.** Añadido test que comprueba que el PDF embebe el logo como XObject 569×158. Es la garantía de que el logo REALMENTE está en el PDF (no solo referenciado). Dos tests de regresión adicionales para la cabecera. Total: **223/223 tests passing** (220 previos + 3 nuevos).
 
-**Validación:** 223/223 tests passing (220 previos + 3 nuevos: uno que comprueba que el PDF embebe el logo como XObject de 569×158 y dos de regresión de la cabecera). `npm run build` sin errores ni warnings. Logo verificado en el navegador sobre `/login` (carga desde `/_next/image`, 173×48 px renderizados, proporción intacta).
+9. **Decisión de no parsear coordenadas del content stream en los tests.** Claude Code escribió inicialmente un test que parseaba las coordenadas del content stream del PDF para verificar el arreglo, pero lo descartó porque dependía de cómo emite react-pdf sus operadores y se rompería en cualquier actualización de la librería. El test permanente asserta el invariante de estilo (fuente, tamaños), que es lo que rompería quien vuelva a tocar la cabecera.
 
-**Pendiente de validación manual por Alan:** la topbar con estado activo requiere iniciar sesión, y no introduzco contraseñas en formularios. Comprobar navegando a `/presupuestos`, `/presupuestos/[id]`, `/clientes` y `/admin/tarifas/dtf`.
+10. **Logo vectorial (SVG) sigue pendiente.** El PNG a 130pt de ancho imprime a ~111 ppp — bien en pantalla, aceptable en papel A4. Suficiente para operar. Nota 23 marcada como "parcialmente resuelta"; solicitar SVG a Espe cuando vuelva de vacaciones.
+
+**Estado de tests:** 223/223 tests passing (220 previos + 3 nuevos del Patch 7A).
 
 ---
 
-*Última actualización del documento: agosto 2026 tras el Patch 7A. Sistema funcionalmente COMPLETO de punta a punta.*
+*Última actualización del documento: agosto 2026 tras cierre de Patch 7A. Sistema funcionalmente COMPLETO y visualmente pulido, listo para uso real.*
