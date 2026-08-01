@@ -65,21 +65,19 @@ export function PresupuestoPreview({
       >
         {/* Cabecera */}
         <header className="flex items-start justify-between gap-8 border-b border-[#e0e0e0] pb-6">
-          <div className="flex items-center gap-3">
-            <span
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0c8aa3] text-lg font-semibold text-white"
-              aria-hidden="true"
-            >
-              A
-            </span>
-            <div>
-              <p className="text-lg font-semibold tracking-tight text-[#0c8aa3]">
-                {EMPRESA.nombre_comercial}
-              </p>
-              <p className="text-xs text-[#5a5a5a]">
-                {EMPRESA.localidad} · {EMPRESA.provincia}
-              </p>
-            </div>
+          {/* El logo oficial ya rotula "ANCORA PUBLICITAT": no se repite en texto. */}
+          <div className="flex flex-col gap-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- réplica fiel
+                del PDF: `next/image` envuelve el logo en su propio contenedor y
+                descuadra la cabecera respecto al documento impreso. */}
+            <img
+              src="/logo-ancora.png"
+              alt="Ancora Publicitat"
+              className="h-11 w-auto"
+            />
+            <p className="text-xs text-[#5a5a5a]">
+              {EMPRESA.localidad} · {EMPRESA.provincia}
+            </p>
           </div>
 
           <div className="text-right">
@@ -129,7 +127,7 @@ export function PresupuestoPreview({
             </Dato>
             <Dato>Tel.: {EMPRESA.telefono ?? <ValorPendiente />}</Dato>
             {/* El email es opcional: si no está, la línea no aparece. */}
-            {EMPRESA.email && <Dato>{EMPRESA.email}</Dato>}
+            {EMPRESA.email && <Dato>Email: {EMPRESA.email}</Dato>}
           </div>
 
           <div>

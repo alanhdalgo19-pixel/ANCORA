@@ -55,15 +55,11 @@ function Cabecera({ presupuesto }: { presupuesto: Presupuesto }) {
   return (
     <View style={estilos.cabecera}>
       <View style={estilos.cabeceraIzquierda}>
+        {/* El logo oficial ya rotula "ANCORA PUBLICITAT": no se repite en texto. */}
         <LogoAncora />
-        <View>
-          <Text style={estilos.nombreComercial}>
-            {EMPRESA.nombre_comercial}
-          </Text>
-          <Text style={estilos.tenue}>
-            {EMPRESA.localidad} · {EMPRESA.provincia}
-          </Text>
-        </View>
+        <Text style={estilos.tenue}>
+          {EMPRESA.localidad} · {EMPRESA.provincia}
+        </Text>
       </View>
 
       <View style={estilos.cabeceraDerecha}>
@@ -134,8 +130,7 @@ function BloqueDeYPara({
           ({empresa.provincia})
         </Text>
         {empresa.telefono && <Text>Tfno.: {empresa.telefono}</Text>}
-        {/* El email sigue pendiente de confirmar: si falta, no se imprime. */}
-        {empresa.email && <Text>{empresa.email}</Text>}
+        {empresa.email && <Text>Email: {empresa.email}</Text>}
       </View>
 
       <View style={estilos.columna}>

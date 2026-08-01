@@ -17,6 +17,7 @@ import type { Cliente, Presupuesto } from "@/types/database";
 import type { LineaVista } from "@/types/presupuestos";
 import { PresupuestoPDF } from "./PresupuestoPDF";
 import { nombreArchivoPDF, rutaStoragePDF } from "./nombres";
+import { estilos } from "./styles";
 
 const CLIENTE: Cliente = {
   id: "cliente-1",
@@ -178,6 +179,33 @@ describe("PresupuestoPDF", () => {
     const buffer = await renderizar(conDescuento);
     expect(buffer.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   }, 30_000);
+
+  it("embebe el logo oficial como imagen del documento", async () => {
+    // El logo dejó de ser un placeholder dibujado con `View`/`Text` en el
+    // Patch 7A: si `public/logo-ancora.png` desapareciera o `Image` dejara de
+    // aceptar el buffer, el PDF saldría sin marca y nadie se enteraría.
+    const pdf = (await renderizar()).toString("latin1");
+
+    expect(pdf).toMatch(/\/Subtype\s*\/Image/);
+    expect(pdf).toMatch(/\/Width\s+569/);
+    expect(pdf).toMatch(/\/Height\s+158/);
+  }, 30_000);
+});
+
+describe("cabecera: el número no se solapa con el título (CLAUDE.md 13.8)", () => {
+  // Regresión del bug corregido en el Patch 7A. El número se pinta justo debajo
+  // del título, así que la caja de línea del título más su margen tienen que
+  // caber antes: si alguien vuelve a subir `fontSize` o quita el `lineHeight`
+  // explícito, el número se monta encima de la última letra.
+  const alturaTitulo = estilos.titulo.fontSize! * estilos.titulo.lineHeight!;
+
+  it("la caja del título cabe en el hueco reservado sobre el número", () => {
+    expect(alturaTitulo).toBeLessThanOrEqual(22);
+  });
+
+  it("el número deja separación visible bajo el título", () => {
+    expect(estilos.numero.marginTop!).toBeGreaterThanOrEqual(5);
+  });
 });
 
 describe("nombres de archivo", () => {

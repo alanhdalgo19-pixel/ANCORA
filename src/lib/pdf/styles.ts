@@ -50,29 +50,31 @@ export const estilos = StyleSheet.create({
     paddingBottom: 14,
   },
   cabeceraIzquierda: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  nombreComercial: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 13,
-    color: COLOR.primary,
+    // El logo oficial ya incluye el rótulo "ANCORA PUBLICITAT", así que la
+    // localidad va debajo en columna en vez de al lado de una marca dibujada.
+    flexDirection: "column",
+    gap: 4,
   },
   cabeceraDerecha: {
     alignItems: "flex-end",
   },
   titulo: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 22,
+    // 18 pt en vez de 22: con 22 el bloque del título comía el espacio del
+    // número y ambos se solapaban (CLAUDE.md 13.8 punto 1).
+    fontSize: 18,
     letterSpacing: 2,
     color: COLOR.textPrimary,
+    // `lineHeight` explícito: sin él la caja de línea del título depende del
+    // valor heredado de `page` y el número se pintaba encima de la última letra.
+    lineHeight: 1.2,
   },
   numero: {
     fontFamily: "Helvetica-Bold",
     fontSize: 11,
     color: COLOR.primary,
-    marginTop: 3,
+    lineHeight: 1.2,
+    marginTop: 6,
   },
 
   // ── Badges ─────────────────────────────────────────────────────────

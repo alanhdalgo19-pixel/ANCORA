@@ -1,10 +1,10 @@
 // Datos fiscales de Ancora y textos fijos del presupuesto (CLAUDE.md 1 y 7.9).
 //
 // Confirmados por el usuario en el Prompt 7 a partir de los presupuestos
-// históricos de Ancora. El único campo que sigue a `null` es el email: no está
-// confirmado con Espe y, al ser opcional en un presupuesto, la línea
-// simplemente se omite del documento en vez de imprimir un "PENDIENTE" que
-// acabaría delante del cliente. Ver CLAUDE.md sección 10 (pendientes).
+// históricos de Ancora. El email se confirmó en el Patch 7A (CLAUDE.md sección
+// 10, pendiente 24 [RESUELTO]). El tipo mantiene los campos opcionales como
+// `string | null` porque el documento omite la línea si alguno faltara, en vez
+// de imprimir un "PENDIENTE" que acabaría delante del cliente.
 
 export interface DatosEmpresa {
   razon_social: string;
@@ -29,9 +29,7 @@ export const EMPRESA: DatosEmpresa = {
   localidad: "Son Ferriol",
   provincia: "Illes Balears",
   telefono: "971 428 072",
-  // PENDIENTE: confirmar con Espe el email de contacto comercial de Ancora.
-  // Mientras sea null, la línea no aparece ni en el preview ni en el PDF.
-  email: null,
+  email: "info@ancorapublicitat.es",
   iban: "ES84 2100 6328 9513 0008 6685",
   banco: "LA CAIXA",
 };
