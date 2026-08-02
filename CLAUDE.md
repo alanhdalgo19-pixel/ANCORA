@@ -708,9 +708,11 @@ Estado a fecha de la última actualización del documento.
 | Datos fiscales de Ancora rellenados | ✅ Completado (email incluido) | Prompt 7 + Patch 7A |
 | Almacenamiento de PDFs en Supabase Storage | ✅ Completado | Prompt 7 |
 | Pulido visual (logo real, nav activa, PDF cabecera) | ✅ Completado | Patch 7A |
-| Composición DTF avanzada integrada en wizard | ⏳ Pendiente obligatorio | Prompt futuro |
-| Histórico avanzado con métricas | ⏳ Pendiente | Prompt 8 |
-| Exportación a Excel | ⏳ Pendiente | Prompt 9 |
+| Composición DTF avanzada integrada en wizard | ✅ Completado | Prompt 8 |
+| Ubicación "Gorra" — eliminación del enum | ⏳ Pendiente | Mini-patch 8A |
+| Visualización SVG del layout del rollo | ⏳ Pendiente (no obligatoria) | Prompt futuro |
+| Histórico avanzado con métricas | ⏳ Pendiente | Prompt 9 |
+| Exportación a Excel para Verifactu | ⏳ Pendiente | Prompt 10 |
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
@@ -783,6 +785,19 @@ Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicio
 
 25. **Aislamiento RLS por operador (opcional).** Actualmente Sonia (operador) puede VER y descargar cualquier presupuesto de la app, no solo los suyos. Coherente con las políticas RLS del Prompt 2 y con el flujo real de un taller pequeño donde todos ayudan a todos. Si Espe/Mohamed piden aislamiento estricto (que Sonia solo vea SUS presupuestos), es un cambio de políticas RLS de la tabla `presupuestos` que afecta también al listado, ficha y preview HTML.
 
+26. **Ubicación "Gorra" en el enum `Ubicacion` — a eliminar en mini-patch 8A.** Alan detectó durante la validación del Prompt 8 que la opción "Gorra" en el selector de ubicación de logos es incorrecta conceptualmente: una gorra es una PRENDA, no una posición sobre una prenda. Actualmente el enum `Ubicacion = 'pecho' | 'espalda' | 'manga' | 'gorra' | 'otro'` (definido en `src/lib/calculos/types.ts`) permite elegir "Gorra" como si fuera una posición equivalente a "Pecho" o "Espalda". **Cambio pendiente en mini-patch 8A:**
+    - Eliminar `'gorra'` del enum `Ubicacion`.
+    - Actualizar todos los formularios (DTF simple, DTF compuesto, bordado, serigrafía, impresión directa, sublimación) para que no ofrezcan "Gorra".
+    - Verificar si hay presupuestos ya creados con `posicion = 'gorra'` en la BD (probablemente no).
+    - Si Ancora hace personalización sobre gorras, la gorra debe estar en el catálogo de prendas (`prendas`), no en el enum de ubicación.
+
+27. **Visualización SVG del layout del rollo — pendiente futuro no obligatorio.** `componerDTF()` ya devuelve las coordenadas (x, y) exactas de cada logo en el rollo, y el snapshot las guarda en `detalle_calculo.layout`. Sonia solicitó (Prompt 8, decisión 3) que en el futuro se pinte un mini-diagrama del rollo con los rectángulos de cada logo en su posición. Se decidió no incluirlo en Prompt 8 para no alargar el prompt. **Cuando se implemente:** componente React SVG que reciba `layout` del snapshot y pinte:
+    - Un rectángulo por cada logo con sus coordenadas.
+    - Colores distintos por tipo de logo.
+    - Etiqueta con el nombre/posición del logo.
+    - Escala visible (0-35 cm horizontal, N metros vertical).
+    - Aparece en el preview del cálculo del wizard Y en el PDF (opcional).
+
 ### 13.5. Node.js 20 será deprecado por @supabase/supabase-js
 
 Durante el `npm run build` del Prompt 4 aparecen múltiples warnings:
@@ -829,6 +844,16 @@ Please upgrade to Node.js 22 or later.
 2. **Topbar no marcaba la pestaña activa.** RESUELTO. Extraído sub-componente `EnlaceNav` en `Topbar.tsx` que usa `usePathname()`. Estilo: borde inferior de 2px en color corporativo (`#0c8aa3`) + `aria-current="page"` para accesibilidad. Activa también en subrutas (ej: `/presupuestos/[id]` mantiene "Presupuestos" resaltado).
 
 Ambas correcciones validadas visualmente por Alan en el navegador.
+
+### 13.9. Micro-deuda técnica: `downlevelIteration` en test de composición DTF
+
+**Detectado durante Prompt 8.** El comando `npx tsc --noEmit` (verificación estricta de TypeScript) reporta un error en `src/lib/calculos/composicion-dtf.test.ts:605`: uso de `MapIterator` sin la opción `downlevelIteration` habilitada en `tsconfig.json`.
+
+**Estado:** el error es **preexistente del Prompt 5** (archivo no tocado en Prompt 8). `next build` pasa igualmente porque el compilador de producción es menos estricto. Los 234 tests pasan sin problemas.
+
+**Impacto:** ninguno funcional. Solo salta el error si se ejecuta `npx tsc --noEmit` como paso de CI/CD estricto.
+
+**Fix:** añadir `"downlevelIteration": true` al `tsconfig.json` (opción 1) o refactorizar la iteración del Map en `composicion-dtf.test.ts:605` a un array (opción 2). Ambos son cambios de 1-2 minutos que se pueden hacer en cualquier prompt futuro.
 
 ---
 
@@ -1046,6 +1071,51 @@ Aplicado inmediatamente tras Prompt 7 para dejar el sistema listo estéticamente
 
 **Estado de tests:** 223/223 tests passing (220 previos + 3 nuevos del Patch 7A).
 
+### Prompt 8 — Composición DTF avanzada integrada en el wizard
+
+Último pendiente obligatorio de Fase 1. Integra `componerDTF()` (que existía como función pura con 63 tests desde el Prompt 5) dentro del wizard para que Sonia pueda meter múltiples logos de distintos tamaños en una sola línea "compuesta".
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- **DTF unificado:** una sola tarjeta "DTF" en el paso 2. El puente decide qué motor usar según el número de logos.
+- **Misma prenda, misma cantidad** para todos los logos de la composición.
+- **Sin visualización SVG del rollo** (queda como pendiente futuro no obligatorio — nota 27).
+- **Persistencia en `detalle_calculo` JSON** — sin migración SQL.
+
+**Decisiones técnicas de implementación (tomadas por Claude Code durante el prompt):**
+
+1. **Una sola variante DTF en `DetallesTecnica`, con `logos: LogoDTFWizard[]`.** No se añadió una variante `DTF_COMPOSICION` al tipo del wizard: la pantalla siempre trabaja con una lista y la decisión de motor vive en el puente, que es donde el prompt la pide.
+
+2. **Bloque `wizard` añadido al snapshot como superset, no sustitución.** `ComposicionSnapshot.inputs.logos` es un `LogoInput[]` del motor, que no guarda la posición (para el bin packing es irrelevante) ni las medidas sin rotar. Ambas hacen falta después: la posición para las sub-líneas del PDF y las medidas originales para reeditar. Se añade `wizard: { cantidad_prendas, incluir_vectorizacion, logos }` junto a `inputs/calculo/comercial/layout`, que siguen siendo exactamente los del motor. Alternativa descartada: codificar la posición dentro de `LogoInput.id`, frágil de parsear.
+
+3. **Un logo rotable se orienta en el puente, no en el motor.** `calcularDTF` no conoce el concepto de "rotable" y no se toca. El puente replica el criterio de `componerDTF` (dejar la dimensión mayor en horizontal) y le pasa las medidas ya aplicadas. Así el caso 5 del checklist (40×20 rotable como logo único) funciona conservando el snapshot `DTF`, como exige el checklist. El PDF muestra las medidas del bloque `wizard` (40×20, lo que se estampa) y no las rotadas (20×40, cómo se corta el rollo).
+
+4. **La vectorización en composición la monta el puente.** `componerDTF` no devuelve `extras[]`; se construye el extra "Vectorización" con el mismo importe y forma que produce `calcularDTF`, para que la línea hija sea indistinguible en el hub y el PDF.
+
+5. **Columnas `posicion/ancho_logo_cm/alto_logo_cm` de una línea compuesta guardan las del PRIMER logo.** Son informativas y sirven para filtrar en el listado; el detalle completo vive en el snapshot. Decisión pragmática para no romper el esquema.
+
+6. **`ResultadoTecnica` como forma normalizada en el puente.** `componerDTF` no devuelve un `CalculoResultado` estándar (su `comercial` no tiene unitario ni extras), así que ambos resultados se normalizan y el resto del puente ya no distingue. Añade `warnings: string[]`, vacío para todas las técnicas salvo la composición.
+
+7. **`ParametrosWizard` gana un bloque `dtf` (`ancho_rollo_cm`, `margen_seguridad_cm`)** para que el Zod del formulario pueda bloquear el logo demasiado ancho sin ir al servidor. Validación cliente-side para UX inmediata.
+
+8. **Página `/composicion-dtf` reciclada.** Era un stub de Prompt 0 ("Próximamente"), huérfano y sin enlace en la navegación. Ahora que la funcionalidad existe decía algo falso: se ha convertido en un puntero al wizard ("Para hacer composiciones DTF, crea un presupuesto y elige DTF").
+
+9. **Visualización SVG del rollo no incluida** (fuera de alcance por decisión A.3). Las coordenadas `x, y` siguen guardándose en `layout` dentro del snapshot, listas para cuando se pinte (nota 27 pendiente).
+
+**Validación real por Alan:** los 6 casos del checklist pasaron. Caso 2 (DTF compuesto con 240 logos: pecho 9×4 + espalda 25×30) genera PDF `2026/000098/0` con:
+- 38,41 m de rollo
+- 70,2% de aprovechamiento
+- 120 unidades × 5,84 €/ud = **701,20 €** de línea
+- IVA 21%: 147,25 €
+- Total: **848,45 €**
+
+Los warnings del algoritmo funcionaron correctamente en producción (ej: "El logo 'Logo espalda' ahorraría rollo si se pudiera rotar (25 cm de alto en vez de 30 cm). Márcalo como rotable si el diseño lo permite.").
+
+**Estado de tests:** 234/234 tests passing (223 previos + 11 nuevos del Prompt 8, superior a los ~5 estimados).
+
+**Observaciones detectadas durante la validación (documentadas como pendientes):**
+- Nota 26: ubicación "Gorra" en el enum `Ubicacion` — a eliminar en mini-patch 8A (la gorra es una prenda, no una posición sobre una prenda).
+- Sección 13.9: micro-deuda técnica preexistente del Prompt 5 sobre `downlevelIteration`.
+
 ---
 
-*Última actualización del documento: agosto 2026 tras cierre de Patch 7A. Sistema funcionalmente COMPLETO y visualmente pulido, listo para uso real.*
+*Última actualización del documento: agosto 2026 tras cierre de Prompt 8. **Último pendiente obligatorio de Fase 1 completado.** Sistema con composición DTF avanzada operativa.*
