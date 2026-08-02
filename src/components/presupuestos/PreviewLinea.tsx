@@ -69,6 +69,17 @@ export function PreviewLinea({ preview }: { preview: DatosPreviewLinea }) {
         </div>
       </div>
 
+      {/* Avisos del bin packing DTF: informan de rollo desaprovechado, pero
+          no impiden guardar la línea (Prompt 8, parte E.3). */}
+      {preview.warnings.map((aviso) => (
+        <p
+          key={aviso}
+          className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+        >
+          {aviso}
+        </p>
+      ))}
+
       {preview.prenda_sin_precio && (
         <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
           La prenda seleccionada tiene precio 0,00 € configurado. Revisa la

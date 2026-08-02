@@ -13,11 +13,14 @@ import { calcularTotalesPresupuesto } from "@/lib/presupuestos/totales";
 import {
   calcularLinea,
   ErrorCalculo,
+  previsualizarDTF,
   type FilaLineaCalculada,
 } from "@/lib/presupuestos/calcular-linea";
 import type { EstadoPresupuesto, Rol } from "@/types/database";
 import type {
   DatosLineaWizard,
+  LogoDTFWizard,
+  PreviewComposicionDTF,
   PreviewLinea,
   ResultadoAccion,
 } from "@/types/presupuestos";
@@ -398,6 +401,53 @@ export async function previsualizarLinea(
   } catch (error) {
     if (error instanceof ErrorCalculo) return fallo(error.message);
     return fallo("No se ha podido calcular la línea.");
+  }
+}
+
+/**
+ * Cálculo en vivo del bloque de logos del paso 4 de DTF (Prompt 8).
+ *
+ * El formulario la llama con debounce cada vez que Sonia toca un campo, así
+ * que solo resuelve la técnica: es mucho más barata que `previsualizarLinea` y
+ * no necesita que la línea esté completa.
+ */
+export async function previsualizarComposicionDTF(
+  presupuestoId: string,
+  datos: { cantidad: number; logos: LogoDTFWizard[] },
+): Promise<ResultadoAccion<PreviewComposicionDTF>> {
+  const permiso = await sesionEditora();
+  if (!permiso.ok) return permiso;
+
+  const supabase = createClient();
+  const { data: presupuesto } = await supabase
+    .from("presupuestos")
+    .select("cliente_id")
+    .eq("id", presupuestoId)
+    .single();
+
+  if (!presupuesto) return fallo("No se ha encontrado el presupuesto.");
+
+  const cliente = await cargarClienteDePresupuesto(
+    supabase,
+    presupuesto.cliente_id as string,
+  );
+  if (!cliente) return fallo("No se ha encontrado el cliente del presupuesto.");
+
+  try {
+    const datosPreview = await previsualizarDTF(
+      supabase,
+      datos.logos,
+      datos.cantidad,
+      cliente.tipo_cliente,
+    );
+    return { ok: true, datos: datosPreview };
+  } catch (error) {
+    if (error instanceof ErrorCalculo) return fallo(error.message);
+    return fallo(
+      error instanceof Error
+        ? error.message
+        : "No se ha podido calcular la composición.",
+    );
   }
 }
 

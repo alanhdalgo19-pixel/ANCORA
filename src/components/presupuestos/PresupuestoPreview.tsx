@@ -6,6 +6,7 @@ import {
 } from "@/lib/empresa";
 import { formatEuros, formatFecha } from "@/lib/format";
 import {
+  sublineasLogosComposicion,
   subdescripcionLinea,
   subdescripcionPrenda,
 } from "@/lib/presupuestos/descripciones";
@@ -204,6 +205,9 @@ export function PresupuestoPreview({
                     ? subdescripcionPrenda(linea.detalle_calculo)
                     : subdescripcionLinea(linea.detalle_calculo);
                 const esExtra = linea.tipo_linea === "extra";
+                // Una línea DTF compuesta enumera sus logos debajo, con el
+                // mismo estilo indentado y gris que usan los extras.
+                const logos = sublineasLogosComposicion(linea.detalle_calculo);
 
                 return (
                   <tr key={linea.id} className="border-b border-[#f0f0f0]">
@@ -220,6 +224,14 @@ export function PresupuestoPreview({
                           {detalle}
                         </span>
                       )}
+                      {logos.map((logo) => (
+                        <span
+                          key={logo}
+                          className="mt-0.5 block pl-4 text-[11px] text-[#5a5a5a]"
+                        >
+                          · {logo}
+                        </span>
+                      ))}
                     </td>
                     <td className="py-2.5 text-right align-top text-[#5a5a5a]">
                       {esExtra ? "" : linea.cantidad}

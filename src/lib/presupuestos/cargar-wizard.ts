@@ -13,6 +13,7 @@ import type {
 import type {
   DatosLineaWizard,
   DetallesTecnica,
+  LogoDTFWizard,
   ParametrosWizard,
 } from "@/types/presupuestos";
 import type { TarifaBordado } from "@/lib/calculos";
@@ -59,10 +60,15 @@ export async function cargarPrendas(
 export async function cargarParametrosWizard(
   supabase: SupabaseServerClient,
 ): Promise<ParametrosWizard> {
-  const [serigrafia, bordado, sublimacion, picajes] = await Promise.all([
+  const [serigrafia, bordado, sublimacion, dtf, picajes] = await Promise.all([
     supabase.from("parametros_serigrafia").select("*").limit(1).maybeSingle(),
     supabase.from("parametros_bordado").select("*").limit(1).maybeSingle(),
     supabase.from("parametros_sublimacion").select("*").limit(1).maybeSingle(),
+    supabase
+      .from("parametros_dtf")
+      .select("ancho_rollo_cm, margen_seguridad_cm")
+      .limit(1)
+      .maybeSingle(),
     supabase
       .from("tipos_picaje")
       .select("codigo, nombre, precio_base, editable_en_presupuesto"),
@@ -82,6 +88,12 @@ export async function cargarParametrosWizard(
     fotolito_pecho: num(serigrafia.data?.fotolito_pecho),
     fotolito_espalda: num(serigrafia.data?.fotolito_espalda),
     pantone_por_color: num(serigrafia.data?.pantone_por_color),
+    // Valores de la semilla como respaldo: si faltara la fila, el formulario
+    // seguiría avisando de logos demasiado anchos en vez de dejar pasar todo.
+    dtf: {
+      ancho_rollo_cm: num(dtf.data?.ancho_rollo_cm, 35),
+      margen_seguridad_cm: num(dtf.data?.margen_seguridad_cm, 0.5),
+    },
     bordado: {
       precio_tarifa_1: num(bordado.data?.precio_tarifa_1),
       precio_tarifa_2: num(bordado.data?.precio_tarifa_2),
@@ -136,6 +148,48 @@ function leerPosicion(fuente: Json, clave: string): Posicion {
 }
 
 /**
+ * Logos tal como los escribió Sonia: el bloque `wizard` que añade el puente al
+ * snapshot del motor. Es la fuente preferida porque conserva la posición y las
+ * medidas sin rotar.
+ */
+function leerLogosWizard(wizard: Json): LogoDTFWizard[] {
+  const lista = Array.isArray(wizard.logos) ? wizard.logos : [];
+  return lista.filter(esObjeto).map((logo) => ({
+    posicion: leerPosicion(logo, "posicion"),
+    ancho_cm: leerNumero(logo, "ancho_cm") ?? 0,
+    alto_cm: leerNumero(logo, "alto_cm") ?? 0,
+    rotable: logo.rotable === true,
+  }));
+}
+
+/**
+ * Respaldo para líneas guardadas antes del Prompt 8, que no llevan bloque
+ * `wizard`: se reconstruyen desde los inputs del motor.
+ */
+function leerLogosSnapshot(tecnica: string, inputs: Json): LogoDTFWizard[] {
+  if (tecnica === "DTF") {
+    return [
+      {
+        posicion: leerPosicion(inputs, "posicion"),
+        ancho_cm: leerNumero(inputs, "ancho_logo_cm") ?? 0,
+        alto_cm: leerNumero(inputs, "alto_logo_cm") ?? 0,
+        rotable: false,
+      },
+    ];
+  }
+
+  // Composición sin bloque `wizard`: el motor no guarda la posición, así que
+  // todos vuelven como "pecho" y Sonia los corrige si hace falta.
+  const lista = Array.isArray(inputs.logos) ? inputs.logos : [];
+  return lista.filter(esObjeto).map((logo) => ({
+    posicion: "pecho" as Posicion,
+    ancho_cm: leerNumero(logo, "ancho_cm") ?? 0,
+    alto_cm: leerNumero(logo, "alto_cm") ?? 0,
+    rotable: logo.rotable === true,
+  }));
+}
+
+/**
  * Devuelve los datos del wizard equivalentes a una línea ya guardada, para
  * precargar el formulario de edición. Se reconstruye desde el snapshot
  * `detalle_calculo.inputs`, que es la copia fiel de lo que se introdujo.
@@ -161,15 +215,27 @@ export function reconstruirDatosLinea(linea: {
   let detalles: DetallesTecnica;
 
   switch (tecnica) {
+    // Las dos variantes de DTF vuelven al mismo formulario: una lista de
+    // logos. Con un elemento el wizard rehará el cálculo simple y con varios
+    // el compuesto, igual que la primera vez (Prompt 8).
     case "DTF":
+    case "DTF_COMPOSICION": {
+      const wizard = esObjeto(snapshot.wizard) ? snapshot.wizard : null;
+      const logos = wizard
+        ? leerLogosWizard(wizard)
+        : leerLogosSnapshot(tecnica, inputs);
+
+      if (!logos.length) return null;
+
       detalles = {
         tecnica: "DTF",
-        posicion: leerPosicion(inputs, "posicion"),
-        ancho_logo_cm: leerNumero(inputs, "ancho_logo_cm") ?? 0,
-        alto_logo_cm: leerNumero(inputs, "alto_logo_cm") ?? 0,
-        incluir_vectorizacion: inputs.incluir_vectorizacion === true,
+        logos,
+        incluir_vectorizacion:
+          wizard?.incluir_vectorizacion === true ||
+          inputs.incluir_vectorizacion === true,
       };
       break;
+    }
 
     case "BORDADO":
       detalles = {

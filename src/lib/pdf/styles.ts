@@ -170,6 +170,13 @@ export const estilos = StyleSheet.create({
     color: COLOR.textTertiary,
     marginTop: 1.5,
   },
+  /** Un logo de una línea DTF compuesta (Prompt 8). */
+  sublineaLogo: {
+    fontSize: 8,
+    color: COLOR.textSecondary,
+    paddingLeft: 10,
+    marginTop: 1.5,
+  },
   sinLineas: {
     paddingVertical: 18,
     textAlign: "center",

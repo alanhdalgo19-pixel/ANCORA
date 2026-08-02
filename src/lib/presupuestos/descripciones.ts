@@ -40,13 +40,25 @@ export function tituloLineaTecnica(
   nombrePrenda: string | null,
 ): string {
   const tecnica = NOMBRE_TECNICA[detalles.tecnica];
-  const posicion =
-    "posicion" in detalles
-      ? NOMBRE_POSICION[detalles.posicion]
-      : NOMBRE_POSICION[detalles.ubicacion];
 
-  const base = `${tecnica} en ${posicion.toLowerCase()}`;
+  // DTF con varios logos: no hay una única posición que nombrar, así que el
+  // título anuncia la composición y las posiciones bajan a las sub-líneas.
+  const base =
+    detalles.tecnica === "DTF" && detalles.logos.length > 1
+      ? `${tecnica} compuesta (${detalles.logos.length} logos)`
+      : `${tecnica} en ${posicionDeDetalles(detalles).toLowerCase()}`;
+
   return nombrePrenda ? `${base} sobre ${nombrePrenda}` : base;
+}
+
+/** Posición representativa de la línea (la del primer logo en composición). */
+export function posicionDeDetalles(detalles: DetallesTecnica): string {
+  if (detalles.tecnica === "DTF") {
+    return NOMBRE_POSICION[detalles.logos[0]?.posicion ?? "pecho"];
+  }
+  return "posicion" in detalles
+    ? NOMBRE_POSICION[detalles.posicion]
+    : NOMBRE_POSICION[detalles.ubicacion];
 }
 
 /** Título de la línea de venta de prenda. */
@@ -90,6 +102,53 @@ function leerBooleano(fuente: Json | null, clave: string): boolean {
   return fuente?.[clave] === true;
 }
 
+function leerLista(fuente: Json | null, clave: string): Json[] {
+  const valor = fuente?.[clave];
+  return Array.isArray(valor) ? valor.filter(esObjeto) : [];
+}
+
+/**
+ * Sub-líneas de una línea DTF compuesta: una por logo, con su posición y sus
+ * medidas. El PDF y el preview las pintan indentadas y en gris, igual que los
+ * extras (Prompt 8, parte D).
+ *
+ * Devuelve `[]` para cualquier otro tipo de línea, de modo que el llamante
+ * puede invocarla sin comprobar antes la técnica.
+ */
+export function sublineasLogosComposicion(detalleCalculo: unknown): string[] {
+  if (!esObjeto(detalleCalculo)) return [];
+  if (leerTexto(detalleCalculo, "tecnica") !== "DTF_COMPOSICION") return [];
+
+  // Fuente preferida: el bloque `wizard`, que conserva la posición elegida en
+  // pantalla. El motor no la guarda porque para el bin packing es irrelevante.
+  const wizard = leerObjeto(detalleCalculo, "wizard");
+  const logosWizard = leerLista(wizard, "logos");
+  if (logosWizard.length) {
+    return logosWizard.map((logo) => {
+      const posicion = leerTexto(logo, "posicion");
+      const nombre =
+        posicion && posicion in NOMBRE_POSICION
+          ? NOMBRE_POSICION[posicion as Posicion].toLowerCase()
+          : "logo";
+      return `Logo ${nombre} ${medidas(logo, "ancho_cm", "alto_cm")}`;
+    });
+  }
+
+  // Respaldo: los inputs del motor, que sí llevan un nombre legible.
+  const inputs = leerObjeto(detalleCalculo, "inputs");
+  return leerLista(inputs, "logos").map((logo) => {
+    const nombre = leerTexto(logo, "nombre") ?? leerTexto(logo, "id") ?? "Logo";
+    return `${nombre} ${medidas(logo, "ancho_cm", "alto_cm")}`;
+  });
+}
+
+function medidas(fuente: Json, claveAncho: string, claveAlto: string): string {
+  const ancho = leerNumero(fuente, claveAncho);
+  const alto = leerNumero(fuente, claveAlto);
+  if (ancho === null || alto === null) return "";
+  return `${formatMedida(ancho)} × ${formatMedida(alto)} cm`;
+}
+
 /**
  * Sub-línea técnica en gris pequeño debajo de la descripción principal.
  * Devuelve `null` si el snapshot no tiene la forma esperada (líneas antiguas o
@@ -105,13 +164,35 @@ export function subdescripcionLinea(detalleCalculo: unknown): string | null {
 
   switch (tecnica) {
     case "DTF": {
-      const ancho = leerNumero(inputs, "ancho_logo_cm");
-      const alto = leerNumero(inputs, "alto_logo_cm");
+      // Se prefieren las medidas del bloque `wizard`: son las que se estampan
+      // sobre la prenda. Las de `inputs` pueden venir rotadas si el logo era
+      // rotable, y esa rotación es un detalle de cómo se corta el rollo.
+      const logoWizard = leerLista(leerObjeto(detalleCalculo, "wizard"), "logos")[0];
+      const ancho = logoWizard
+        ? leerNumero(logoWizard, "ancho_cm")
+        : leerNumero(inputs, "ancho_logo_cm");
+      const alto = logoWizard
+        ? leerNumero(logoWizard, "alto_cm")
+        : leerNumero(inputs, "alto_logo_cm");
       if (ancho !== null && alto !== null) {
         partes.push(`Logo ${formatMedida(ancho)} × ${formatMedida(alto)} cm`);
       }
       const metros = leerNumero(calculo, "metros_necesarios");
       if (metros !== null) partes.push(`${formatMedida(metros)} m de rollo`);
+      break;
+    }
+    case "DTF_COMPOSICION": {
+      // Los metros y la eficiencia salen del bloque `composicion`, no de
+      // `calculo`: es el bin packing quien los determina.
+      const composicion = leerObjeto(detalleCalculo, "composicion");
+      const total = leerNumero(inputs, "cantidad_total");
+      if (total !== null) partes.push(`${total} logos en total`);
+      const metros = leerNumero(composicion, "metros_necesarios");
+      if (metros !== null) partes.push(`${formatMedida(metros)} m de rollo`);
+      const eficiencia = leerNumero(composicion, "eficiencia_pct");
+      if (eficiencia !== null) {
+        partes.push(`${formatMedida(eficiencia)} % de aprovechamiento`);
+      }
       break;
     }
     case "BORDADO": {

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { formatEuros } from "@/lib/format";
 import {
+  sublineasLogosComposicion,
   subdescripcionLinea,
   subdescripcionPrenda,
 } from "@/lib/presupuestos/descripciones";
@@ -85,6 +86,7 @@ export function TablaLineasPresupuesto({
                 linea.tipo_linea === "prenda"
                   ? subdescripcionPrenda(linea.detalle_calculo)
                   : subdescripcionLinea(linea.detalle_calculo);
+              const logos = sublineasLogosComposicion(linea.detalle_calculo);
 
               return (
                 <TableRow key={linea.id}>
@@ -101,6 +103,14 @@ export function TablaLineasPresupuesto({
                             {detalle}
                           </span>
                         )}
+                        {logos.map((logo) => (
+                          <span
+                            key={logo}
+                            className="mt-0.5 block pl-4 text-xs text-muted-foreground"
+                          >
+                            · {logo}
+                          </span>
+                        ))}
                       </>
                     )}
                   </TableCell>

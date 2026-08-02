@@ -25,6 +25,11 @@ export interface ParametrosWizard {
   fotolito_pecho: number;
   fotolito_espalda: number;
   pantone_por_color: number;
+  /** Medidas del rollo: el formulario avisa si un logo no cabe a lo ancho. */
+  dtf: {
+    ancho_rollo_cm: number;
+    margen_seguridad_cm: number;
+  };
   bordado: {
     precio_tarifa_1: number;
     precio_tarifa_2: number;
@@ -42,13 +47,31 @@ export interface ParametrosWizard {
   sublimacion_disponible: boolean;
 }
 
+/**
+ * Un logo de la lista del paso 4 de DTF (Prompt 8).
+ *
+ * El wizard trabaja siempre con una lista: con un único elemento el sistema
+ * usa `calcularDTF` (comportamiento de siempre) y con dos o más pasa a
+ * `componerDTF`, el bin packing del rollo. La decisión la toma el puente
+ * `calcular-linea.ts`, no la pantalla.
+ */
+export interface LogoDTFWizard {
+  posicion: Posicion;
+  ancho_cm: number;
+  alto_cm: number;
+  /** Si es `true`, el bin packing puede tumbarlo 90° para ahorrar rollo. */
+  rotable: boolean;
+}
+
+/** Máximo de logos por línea compuesta: evita composiciones absurdas. */
+export const MAX_LOGOS_COMPOSICION = 10;
+
 /** Detalles del paso 4 del wizard, uno por técnica. */
 export type DetallesTecnica =
   | {
       tecnica: "DTF";
-      posicion: Posicion;
-      ancho_logo_cm: number;
-      alto_logo_cm: number;
+      /** Al menos uno. Todos se estampan sobre cada una de las prendas. */
+      logos: LogoDTFWizard[];
       incluir_vectorizacion: boolean;
     }
   | {
@@ -113,6 +136,8 @@ export interface PreviewLinea {
   tecnica: FilaPreviewLinea;
   /** Picaje, fotolitos, vectorización, pantones: van en líneas aparte. */
   extras: FilaPreviewLinea[];
+  /** Avisos no bloqueantes del motor (hoy solo los del bin packing DTF). */
+  warnings: string[];
   /** Desglose interno, solo informativo para Sonia y Espe. */
   desglose: {
     coste_interno: number;
@@ -158,6 +183,32 @@ export interface PrendaSnapshot {
     tramo_cantidad: string;
     importe_linea: number;
   };
+}
+
+/**
+ * Cálculo en vivo del bloque DTF del paso 4 (Prompt 8).
+ *
+ * Es un resumen más ligero que `PreviewLinea`: se recalcula con cada tecla
+ * (con debounce) mientras Sonia ajusta los logos, así que no arrastra ni la
+ * venta de prenda ni los extras.
+ */
+export interface PreviewComposicionDTF {
+  /** `"DTF"` con un logo, `"DTF_COMPOSICION"` con dos o más. */
+  modo: "DTF" | "DTF_COMPOSICION";
+  /** Suma de logos estampados: nº de logos × cantidad de prendas. */
+  cantidad_total_logos: number;
+  metros_necesarios: number;
+  /** Solo lo calcula el bin packing; `null` con un único logo. */
+  eficiencia_pct: number | null;
+  coste_interno: number;
+  margen_aplicado_pct: number;
+  /** Importe de la línea sin IVA y sin extras. */
+  precio_total: number;
+  precio_promedio_por_logo: number;
+  /** `precio_total` repartido entre las prendas, que es lo que va al PDF. */
+  precio_por_prenda: number;
+  aplicado_minimo: boolean;
+  warnings: string[];
 }
 
 /** Snapshot que se guarda en una línea de tipo 'extra'. */

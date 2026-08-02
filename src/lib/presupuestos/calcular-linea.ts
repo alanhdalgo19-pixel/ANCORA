@@ -13,10 +13,15 @@ import {
   calcularImpresionDirecta,
   calcularSerigrafia,
   calcularSublimacion,
+  componerDTF,
+  redondear2,
   VERSION_CALCULO,
   type CalculoResultado,
   type CodigoPicaje,
+  type DtfComposicionConfig,
+  type Extra,
   type FilaTarifaSerigrafia,
+  type LogoInput,
   type TramoMargen,
 } from "@/lib/calculos";
 import type { createClient } from "@/lib/supabase/server";
@@ -25,16 +30,21 @@ import type {
   CodigoTecnica,
   ColorGrupo,
   Posicion,
+  TipoCliente,
   TipoLinea,
 } from "@/types/database";
 import type {
   DatosLineaWizard,
   DetallesTecnica,
   ExtraSnapshot,
+  LogoDTFWizard,
   PrendaSnapshot,
+  PreviewComposicionDTF,
   PreviewLinea,
 } from "@/types/presupuestos";
+import { MAX_LOGOS_COMPOSICION } from "@/types/presupuestos";
 import {
+  NOMBRE_POSICION,
   subdescripcionLinea,
   subdescripcionPrenda,
   tituloLineaPrenda,
@@ -180,10 +190,231 @@ async function cargarPicaje(
 }
 
 // ---------------------------------------------------------------------------
+// DTF: motor simple vs. composición (Prompt 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuración del rollo, común a `calcularDTF` y a `componerDTF`: los dos
+ * tipos coinciden campo a campo (ver `DtfComposicionConfig` en el motor).
+ */
+function construirConfigDTF(
+  params: Record<string, unknown>,
+  tramos: TramoMargen[],
+): DtfComposicionConfig {
+  return {
+    ancho_rollo_cm: num(params.ancho_rollo_cm),
+    precio_metro: num(params.precio_metro),
+    recorte_por_logo: num(params.recorte_por_logo),
+    mano_obra_por_minuto: num(params.mano_obra_por_minuto),
+    preparacion_pct: num(params.preparacion_pct),
+    minimo_trabajo: num(params.minimo_trabajo),
+    margen_seguridad_cm: num(params.margen_seguridad_cm),
+    minutos_setup_fijo: num(params.minutos_setup_fijo),
+    minutos_por_logo: num(params.minutos_por_logo),
+    tramos_margen: tramos,
+  };
+}
+
+/** Ancho realmente aprovechable del rollo: hay margen en los dos bordes. */
+function anchoUtilRollo(config: DtfComposicionConfig): number {
+  return config.ancho_rollo_cm - 2 * config.margen_seguridad_cm;
+}
+
+/**
+ * Orientación con la que se coloca un logo suelto en el rollo.
+ *
+ * Réplica del criterio de `componerDTF` (dejar la dimensión mayor en
+ * horizontal, porque el rollo se paga por metro lineal), necesaria aquí porque
+ * `calcularDTF` no conoce el concepto de logo rotable y no se toca: recibe ya
+ * las medidas aplicadas. Si ninguna orientación cabe, devuelve la preferida y
+ * deja que el motor lance su propio error.
+ */
+function orientarLogo(
+  logo: LogoDTFWizard,
+  anchoUtil: number,
+): { ancho: number; alto: number; rotado: boolean } {
+  const sinRotar = { ancho: logo.ancho_cm, alto: logo.alto_cm, rotado: false };
+  if (!logo.rotable) return sinRotar;
+
+  const rotado = { ancho: logo.alto_cm, alto: logo.ancho_cm, rotado: true };
+  const preferida = logo.alto_cm > logo.ancho_cm ? rotado : sinRotar;
+  const alternativa = preferida === rotado ? sinRotar : rotado;
+
+  if (preferida.ancho <= anchoUtil) return preferida;
+  if (alternativa.ancho <= anchoUtil) return alternativa;
+  return preferida;
+}
+
+/**
+ * Bloque que el puente añade al snapshot del motor con los logos TAL COMO los
+ * escribió Sonia.
+ *
+ * El motor no guarda la posición (para el bin packing es irrelevante) ni las
+ * medidas sin rotar, y las dos cosas hacen falta luego: la posición para las
+ * sub-líneas del PDF y las medidas originales para reeditar la línea. Es un
+ * añadido al snapshot, no una sustitución: `inputs`, `calculo`, `comercial` y
+ * `layout` siguen siendo los que devolvió el motor.
+ */
+interface BloqueWizardDTF {
+  cantidad_prendas: number;
+  incluir_vectorizacion: boolean;
+  logos: LogoDTFWizard[];
+}
+
+function bloqueWizardDTF(
+  detalles: Extract<DetallesTecnica, { tecnica: "DTF" }>,
+  cantidad: number,
+): BloqueWizardDTF {
+  return {
+    cantidad_prendas: cantidad,
+    incluir_vectorizacion: detalles.incluir_vectorizacion,
+    logos: detalles.logos.map((logo) => ({ ...logo })),
+  };
+}
+
+/** Valida la lista de logos antes de bajar al motor. */
+function validarLogos(logos: LogoDTFWizard[]): void {
+  if (logos.length === 0) {
+    throw new ErrorCalculo("Añade al menos un logo a la línea de DTF.");
+  }
+  if (logos.length > MAX_LOGOS_COMPOSICION) {
+    throw new ErrorCalculo(
+      `Una línea de DTF admite como máximo ${MAX_LOGOS_COMPOSICION} logos. Reparte el trabajo en varias líneas.`,
+    );
+  }
+}
+
+/**
+ * Traduce los logos del wizard a los `LogoInput` del bin packing.
+ *
+ * Cada logo se estampa sobre TODAS las prendas, así que su cantidad es la
+ * cantidad de prendas: 120 polos con 2 logos son 240 unidades en el rollo.
+ */
+function aLogosInput(
+  logos: LogoDTFWizard[],
+  cantidadPrendas: number,
+): LogoInput[] {
+  return logos.map((logo, indice) => ({
+    id: `logo-${indice + 1}`,
+    nombre: `Logo ${NOMBRE_POSICION[logo.posicion].toLowerCase()}`,
+    ancho_cm: logo.ancho_cm,
+    alto_cm: logo.alto_cm,
+    cantidad: cantidadPrendas,
+    rotable: logo.rotable,
+  }));
+}
+
+/** Extra de vectorización, que en composición no genera el motor. */
+function extraVectorizacion(precio: number): Extra {
+  if (!Number.isFinite(precio) || precio < 0) {
+    throw new ErrorCalculo(
+      "Falta el precio de vectorización en Admin → Serigrafía.",
+    );
+  }
+  return { descripcion: "Vectorización", importe: redondear2(precio) };
+}
+
+// ---------------------------------------------------------------------------
 // Cálculo de la línea de técnica
 // ---------------------------------------------------------------------------
 
 type ResultadoGenerico = CalculoResultado<unknown, unknown>;
+
+/**
+ * Forma común a las dos familias de motor. `componerDTF` no devuelve un
+ * `CalculoResultado` (su snapshot tiene bloques propios y su comercial no
+ * lleva unitario ni extras), así que ambos resultados se normalizan aquí y el
+ * resto del puente ya no distingue.
+ */
+interface ResultadoTecnica {
+  coste_interno: number;
+  margen_aplicado_pct: number;
+  precio_unitario: number;
+  importe_linea: number;
+  aplicado_minimo: boolean;
+  extras: Extra[];
+  tramo_cantidad: string;
+  detalle_calculo: unknown;
+  /** Avisos no bloqueantes: hoy solo los produce el bin packing. */
+  warnings: string[];
+}
+
+function normalizar(resultado: ResultadoGenerico): ResultadoTecnica {
+  return {
+    coste_interno: resultado.coste_interno,
+    margen_aplicado_pct: resultado.margen_aplicado_pct,
+    precio_unitario: resultado.precio_unitario,
+    importe_linea: resultado.importe_linea,
+    aplicado_minimo: resultado.aplicado_minimo,
+    extras: resultado.extras,
+    tramo_cantidad: resultado.detalle_calculo.comercial.tramo_cantidad,
+    detalle_calculo: resultado.detalle_calculo,
+    warnings: [],
+  };
+}
+
+/**
+ * Resuelve la línea de DTF eligiendo motor según el número de logos:
+ * uno → `calcularDTF` (comportamiento de siempre, snapshot `DTF`);
+ * dos o más → `componerDTF` (bin packing, snapshot `DTF_COMPOSICION`).
+ */
+function calcularLineaDTF(
+  detalles: Extract<DetallesTecnica, { tecnica: "DTF" }>,
+  cantidad: number,
+  tipoCliente: TipoCliente,
+  config: DtfComposicionConfig,
+  precioVectorizacion: number,
+): ResultadoTecnica {
+  validarLogos(detalles.logos);
+  const wizard = bloqueWizardDTF(detalles, cantidad);
+
+  if (detalles.logos.length === 1) {
+    const logo = detalles.logos[0];
+    const orientacion = orientarLogo(logo, anchoUtilRollo(config));
+
+    const resultado = calcularDTF(
+      {
+        cantidad,
+        ancho_logo_cm: orientacion.ancho,
+        alto_logo_cm: orientacion.alto,
+        posicion: logo.posicion,
+        tipo_cliente: tipoCliente,
+        incluir_vectorizacion: detalles.incluir_vectorizacion,
+        precio_vectorizacion: precioVectorizacion,
+      },
+      config,
+    );
+
+    const normalizado = normalizar(resultado);
+    return {
+      ...normalizado,
+      detalle_calculo: { ...resultado.detalle_calculo, wizard },
+    };
+  }
+
+  const composicion = componerDTF(
+    aLogosInput(detalles.logos, cantidad),
+    config,
+  );
+
+  const extras = detalles.incluir_vectorizacion
+    ? [extraVectorizacion(precioVectorizacion)]
+    : [];
+
+  return {
+    coste_interno: composicion.coste_interno,
+    margen_aplicado_pct: composicion.margen_aplicado_pct,
+    // El unitario que se imprime es POR PRENDA, no por logo: en el PDF la
+    // cantidad de la línea son las 120 prendas, no los 240 logos.
+    precio_unitario: redondear2(composicion.precio_total / cantidad),
+    importe_linea: composicion.precio_total,
+    aplicado_minimo: composicion.aplicado_minimo,
+    extras,
+    tramo_cantidad: composicion.detalle_calculo.comercial.tramo_cantidad,
+    detalle_calculo: { ...composicion.detalle_calculo, wizard },
+    warnings: composicion.warnings,
+  };
+}
 
 async function calcularTecnica(
   supabase: SupabaseServerClient,
@@ -191,7 +422,7 @@ async function calcularTecnica(
   cantidad: number,
   cliente: Pick<Cliente, "tipo_cliente" | "descuento_bordado_pct">,
 ): Promise<{
-  resultado: ResultadoGenerico;
+  resultado: ResultadoTecnica;
   tecnicaId: string;
   picajeId: string | null;
 }> {
@@ -206,28 +437,12 @@ async function calcularTecnica(
         cargarFilaUnica(supabase, "parametros_serigrafia", "serigrafía"),
       ]);
 
-      const resultado = calcularDTF(
-        {
-          cantidad,
-          ancho_logo_cm: detalles.ancho_logo_cm,
-          alto_logo_cm: detalles.alto_logo_cm,
-          posicion: detalles.posicion,
-          tipo_cliente: tipoCliente,
-          incluir_vectorizacion: detalles.incluir_vectorizacion,
-          precio_vectorizacion: num(paramsSerigrafia.vectorizacion),
-        },
-        {
-          ancho_rollo_cm: num(params.ancho_rollo_cm),
-          precio_metro: num(params.precio_metro),
-          recorte_por_logo: num(params.recorte_por_logo),
-          mano_obra_por_minuto: num(params.mano_obra_por_minuto),
-          preparacion_pct: num(params.preparacion_pct),
-          minimo_trabajo: num(params.minimo_trabajo),
-          margen_seguridad_cm: num(params.margen_seguridad_cm),
-          minutos_setup_fijo: num(params.minutos_setup_fijo),
-          minutos_por_logo: num(params.minutos_por_logo),
-          tramos_margen: tramos,
-        },
+      const resultado = calcularLineaDTF(
+        detalles,
+        cantidad,
+        tipoCliente,
+        construirConfigDTF(params, tramos),
+        num(paramsSerigrafia.vectorizacion),
       );
       return { resultado, tecnicaId, picajeId: null };
     }
@@ -273,7 +488,7 @@ async function calcularTecnica(
           ? (picaje.ids[detalles.tipo_picaje] ?? null)
           : null;
 
-      return { resultado, tecnicaId, picajeId };
+      return { resultado: normalizar(resultado), tecnicaId, picajeId };
     }
 
     case "SERIGRAFIA": {
@@ -310,7 +525,7 @@ async function calcularTecnica(
           tramos_margen: tramos,
         },
       );
-      return { resultado, tecnicaId, picajeId: null };
+      return { resultado: normalizar(resultado), tecnicaId, picajeId: null };
     }
 
     case "IMPRESION_DIRECTA": {
@@ -346,7 +561,7 @@ async function calcularTecnica(
           tramos_margen: tramos,
         },
       );
-      return { resultado, tecnicaId, picajeId: null };
+      return { resultado: normalizar(resultado), tecnicaId, picajeId: null };
     }
 
     case "SUBLIMACION": {
@@ -373,7 +588,7 @@ async function calcularTecnica(
           tramos_margen: tramos,
         },
       );
-      return { resultado, tecnicaId, picajeId: null };
+      return { resultado: normalizar(resultado), tecnicaId, picajeId: null };
     }
   }
 }
@@ -532,8 +747,19 @@ export async function calcularLinea(
 
   const { resultado, tecnicaId, picajeId } = calculo;
   const detalles = datos.detalles;
+
+  // En una composición DTF no hay una posición ni unas medidas únicas: las
+  // columnas guardan las del primer logo (útiles para filtrar e informar) y el
+  // detalle completo de todos vive en el snapshot.
+  const primerLogo =
+    detalles.tecnica === "DTF" ? (detalles.logos[0] ?? null) : null;
+
   const posicion: Posicion =
-    "posicion" in detalles ? detalles.posicion : detalles.ubicacion;
+    detalles.tecnica === "DTF"
+      ? (primerLogo?.posicion ?? "pecho")
+      : "posicion" in detalles
+        ? detalles.posicion
+        : detalles.ubicacion;
 
   const filaTecnica: FilaLineaCalculada = {
     tipo_linea: "tecnica",
@@ -543,10 +769,16 @@ export async function calcularLinea(
     cantidad: datos.cantidad,
     color: datos.color,
     color_grupo: datos.color_grupo,
-    ancho_logo_cm:
-      "ancho_logo_cm" in detalles ? (detalles.ancho_logo_cm ?? null) : null,
-    alto_logo_cm:
-      "alto_logo_cm" in detalles ? (detalles.alto_logo_cm ?? null) : null,
+    ancho_logo_cm: primerLogo
+      ? primerLogo.ancho_cm
+      : "ancho_logo_cm" in detalles
+        ? (detalles.ancho_logo_cm ?? null)
+        : null,
+    alto_logo_cm: primerLogo
+      ? primerLogo.alto_cm
+      : "alto_logo_cm" in detalles
+        ? (detalles.alto_logo_cm ?? null)
+        : null,
     posicion,
     puntadas: "puntadas" in detalles ? detalles.puntadas : null,
     num_colores: "num_colores" in detalles ? detalles.num_colores : null,
@@ -593,8 +825,6 @@ export async function calcularLinea(
     };
   });
 
-  const comercial = resultado.detalle_calculo.comercial;
-
   const total =
     (prendaCalculada?.fila.importe_linea ?? 0) +
     filaTecnica.importe_linea +
@@ -625,11 +855,12 @@ export async function calcularLinea(
       precio_unitario: extra.precio_unitario,
       importe: extra.importe_linea,
     })),
+    warnings: resultado.warnings,
     desglose: {
       coste_interno: resultado.coste_interno,
       margen_pct: resultado.margen_aplicado_pct,
       aplicado_minimo: resultado.aplicado_minimo,
-      tramo_cantidad: comercial.tramo_cantidad,
+      tramo_cantidad: resultado.tramo_cantidad,
     },
     total: Math.round(total * 100) / 100,
   };
@@ -639,5 +870,69 @@ export async function calcularLinea(
     tecnica: filaTecnica,
     extras: filasExtras,
     preview,
+  };
+}
+
+/**
+ * Cálculo en vivo del bloque de logos del paso 4 (Prompt 8, parte B.4).
+ *
+ * Se llama con cada cambio del formulario (con debounce), así que solo resuelve
+ * la técnica: ni carga la prenda ni monta los extras. Usa exactamente el mismo
+ * camino que `calcularLinea`, de modo que lo que Sonia ve mientras teclea es lo
+ * que se guardará al confirmar.
+ */
+export async function previsualizarDTF(
+  supabase: SupabaseServerClient,
+  logos: LogoDTFWizard[],
+  cantidad: number,
+  tipoCliente: TipoCliente,
+): Promise<PreviewComposicionDTF> {
+  if (!Number.isInteger(cantidad) || cantidad <= 0) {
+    throw new ErrorCalculo("La cantidad debe ser un número entero mayor que cero.");
+  }
+  validarLogos(logos);
+
+  const tecnicaId = await cargarTecnicaId(supabase, "DTF");
+  const [tramos, params, paramsSerigrafia] = await Promise.all([
+    cargarTramos(supabase, tecnicaId, tipoCliente),
+    cargarFilaUnica(supabase, "parametros_dtf", "DTF"),
+    cargarFilaUnica(supabase, "parametros_serigrafia", "serigrafía"),
+  ]);
+
+  const resultado = calcularLineaDTF(
+    { tecnica: "DTF", logos, incluir_vectorizacion: false },
+    cantidad,
+    tipoCliente,
+    construirConfigDTF(params, tramos),
+    num(paramsSerigrafia.vectorizacion),
+  );
+
+  const snapshot = resultado.detalle_calculo as {
+    tecnica: string;
+    calculo?: { metros_necesarios?: number };
+    composicion?: { metros_necesarios?: number; eficiencia_pct?: number };
+  };
+  const esComposicion = snapshot.tecnica === "DTF_COMPOSICION";
+  const cantidadTotalLogos = logos.length * cantidad;
+
+  return {
+    modo: esComposicion ? "DTF_COMPOSICION" : "DTF",
+    cantidad_total_logos: cantidadTotalLogos,
+    metros_necesarios: esComposicion
+      ? num(snapshot.composicion?.metros_necesarios)
+      : num(snapshot.calculo?.metros_necesarios),
+    // El motor simple no mide aprovechamiento: solo lo sabe el bin packing.
+    eficiencia_pct: esComposicion
+      ? num(snapshot.composicion?.eficiencia_pct)
+      : null,
+    coste_interno: resultado.coste_interno,
+    margen_aplicado_pct: resultado.margen_aplicado_pct,
+    precio_total: resultado.importe_linea,
+    precio_promedio_por_logo: redondear2(
+      resultado.importe_linea / cantidadTotalLogos,
+    ),
+    precio_por_prenda: resultado.precio_unitario,
+    aplicado_minimo: resultado.aplicado_minimo,
+    warnings: resultado.warnings,
   };
 }

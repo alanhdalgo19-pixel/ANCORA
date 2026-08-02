@@ -319,6 +319,10 @@ export function LineaWizard({
               valorInicial={
                 detalles?.tecnica === "DTF" ? detalles : null
               }
+              // El cálculo en vivo de la composición necesita el presupuesto
+              // (para el tipo de cliente) y la cantidad de prendas del paso 3.
+              presupuestoId={presupuestoId}
+              cantidad={cantidadNumero}
               {...propsFormulario}
             />
           )}

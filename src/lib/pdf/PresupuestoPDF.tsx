@@ -13,6 +13,7 @@ import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { EMPRESA, FORMA_PAGO_RESUMEN, NOTAS_ESTANDAR } from "@/lib/empresa";
 import { formatEuros, formatFecha } from "@/lib/format";
 import {
+  sublineasLogosComposicion,
   subdescripcionLinea,
   subdescripcionPrenda,
 } from "@/lib/presupuestos/descripciones";
@@ -222,6 +223,9 @@ function TablaLineas({ lineas }: { lineas: LineaVista[] }) {
           linea.tipo_linea === "prenda"
             ? subdescripcionPrenda(linea.detalle_calculo)
             : subdescripcionLinea(linea.detalle_calculo);
+        // Una línea DTF compuesta enumera sus logos debajo, con el mismo
+        // estilo indentado y atenuado que usan las líneas extra.
+        const logos = sublineasLogosComposicion(linea.detalle_calculo);
 
         return (
           <View key={linea.id} style={estilos.fila} wrap={false}>
@@ -230,6 +234,11 @@ function TablaLineas({ lineas }: { lineas: LineaVista[] }) {
                 {esExtra ? `· ${linea.descripcion}` : linea.descripcion}
               </Text>
               {detalle && <Text style={estilos.subdescripcion}>{detalle}</Text>}
+              {logos.map((logo) => (
+                <Text key={logo} style={estilos.sublineaLogo}>
+                  · {logo}
+                </Text>
+              ))}
             </View>
             <Text
               style={[
