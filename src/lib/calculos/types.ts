@@ -15,7 +15,7 @@
 // argumento para poder testearse sin Supabase.
 
 export type TipoCliente = "esporadico" | "habitual";
-export type Ubicacion = "pecho" | "espalda" | "manga" | "gorra" | "otro";
+export type Ubicacion = "pecho" | "espalda" | "manga" | "otro";
 export type UbicacionSerigrafia = "pecho" | "espalda";
 export type ColorGrupo = "blanco" | "color" | "oscuro";
 

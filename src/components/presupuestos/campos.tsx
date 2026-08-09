@@ -32,7 +32,7 @@ export function Campo({
   );
 }
 
-const POSICIONES: Posicion[] = ["pecho", "espalda", "manga", "gorra", "otro"];
+const POSICIONES: Posicion[] = ["pecho", "espalda", "manga", "otro"];
 
 /** Selector de posición. `soloSerigrafia` limita a pecho/espalda. */
 export function SelectorPosicion({

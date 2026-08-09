@@ -14,7 +14,10 @@ export type CodigoTecnica =
 export type CodigoPicaje = "SENCILLO" | "MEDIO" | "COMPLEJO" | "PERSONALIZADO";
 export type ColorGrupo = "blanco" | "color" | "oscuro";
 export type Ubicacion = "pecho" | "espalda";
-export type Posicion = "pecho" | "espalda" | "manga" | "gorra" | "otro";
+// El enum `posicion` de Postgres todavía admite 'gorra' (esquema inicial), pero
+// la aplicación ya no lo ofrece: una gorra es una PRENDA del catálogo, no una
+// posición sobre una prenda (Patch 8A).
+export type Posicion = "pecho" | "espalda" | "manga" | "otro";
 export type UnidadMedidaBordado =
   | "por_puntada"
   | "por_100_puntadas"

@@ -140,7 +140,7 @@ function leerTexto(fuente: Json, clave: string): string | null {
   return typeof valor === "string" ? valor : null;
 }
 
-const POSICIONES: Posicion[] = ["pecho", "espalda", "manga", "gorra", "otro"];
+const POSICIONES: Posicion[] = ["pecho", "espalda", "manga", "otro"];
 
 function leerPosicion(fuente: Json, clave: string): Posicion {
   const valor = leerTexto(fuente, clave);

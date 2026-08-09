@@ -30,7 +30,6 @@ export const NOMBRE_POSICION: Record<Posicion, string> = {
   pecho: "Pecho",
   espalda: "Espalda",
   manga: "Manga",
-  gorra: "Gorra",
   otro: "Otra posición",
 };
 

@@ -29,7 +29,7 @@ import {
 const DEBOUNCE_MS = 300;
 
 const esquemaLogo = z.object({
-  posicion: z.enum(["pecho", "espalda", "manga", "gorra", "otro"]),
+  posicion: z.enum(["pecho", "espalda", "manga", "otro"]),
   ancho_cm: z
     .number({ message: "Introduce el ancho en cm" })
     .positive("El ancho debe ser mayor que cero"),

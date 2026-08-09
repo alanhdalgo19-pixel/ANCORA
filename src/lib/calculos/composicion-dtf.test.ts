@@ -472,7 +472,7 @@ const LOGOS_COMPLEJOS: LogoInput[] = [
   { id: "B", nombre: "Pecho", ancho_cm: 9, alto_cm: 5, cantidad: 60, rotable: false },
   { id: "C", nombre: "Manga larga", ancho_cm: 4, alto_cm: 18, cantidad: 24, rotable: true },
   { id: "D", nombre: "Etiqueta", ancho_cm: 6, alto_cm: 2.5, cantidad: 40, rotable: true },
-  { id: "E", nombre: "Gorra", ancho_cm: 11, alto_cm: 6, cantidad: 15, rotable: false },
+  { id: "E", nombre: "Bolsillo", ancho_cm: 11, alto_cm: 6, cantidad: 15, rotable: false },
 ];
 
 describe("Test 11 — ningún logo se solapa", () => {

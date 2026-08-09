@@ -25,7 +25,7 @@ const ETIQUETA_UNIDAD: Record<UnidadMedidaBordado, string> = {
 
 const esquema = z
   .object({
-    posicion: z.enum(["pecho", "espalda", "manga", "gorra", "otro"]),
+    posicion: z.enum(["pecho", "espalda", "manga", "otro"]),
     ancho_logo_cm: z.number().positive().nullable().optional(),
     alto_logo_cm: z.number().positive().nullable().optional(),
     puntadas: z
