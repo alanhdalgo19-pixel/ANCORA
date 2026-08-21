@@ -31,6 +31,10 @@ const SECCIONES: GrupoAdmin[] = [
   { titulo: "", enlaces: [{ href: "/admin/margenes", etiqueta: "Márgenes" }] },
   { titulo: "", enlaces: [{ href: "/admin/costes", etiqueta: "Costes operativos" }] },
   { titulo: "", enlaces: [{ href: "/admin/proveedores", etiqueta: "Proveedores" }] },
+  {
+    titulo: "",
+    enlaces: [{ href: "/admin/exportacion", etiqueta: "Exportación Excel" }],
+  },
 ];
 
 export function AdminSidebar() {
