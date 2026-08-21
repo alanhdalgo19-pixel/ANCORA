@@ -382,7 +382,7 @@ Claves esperadas: `transporte_baleares`, `transporte_peninsula`, `electricidad_h
 | color_grupo | enum('blanco','color','oscuro') | Para precio prenda |
 | ancho_logo_cm | numeric(5,2) | |
 | alto_logo_cm | numeric(5,2) | |
-| posicion | enum('pecho','espalda','manga','otro') | El enum de Postgres aún admite `'gorra'` (esquema inicial), pero la aplicación ya no lo ofrece desde el Patch 8A: una gorra es una prenda del catálogo, no una posición. |
+| posicion | enum('pecho','espalda','manga','gorra','otro') | |
 | puntadas | integer | Solo bordado |
 | num_colores | integer | Solo serigrafía |
 | prenda_oscura | boolean | Solo serigrafía |
@@ -709,10 +709,10 @@ Estado a fecha de la última actualización del documento.
 | Almacenamiento de PDFs en Supabase Storage | ✅ Completado | Prompt 7 |
 | Pulido visual (logo real, nav activa, PDF cabecera) | ✅ Completado | Patch 7A |
 | Composición DTF avanzada integrada en wizard | ✅ Completado | Prompt 8 |
-| Ubicación "Gorra" — eliminación del enum | ✅ Completado | Patch 8A |
+| Ubicación "Gorra" eliminada del enum | ✅ Completado | Patch 8A |
+| Exportación Excel para Verifactu (3 pestañas) | ✅ Completado | Prompt 9 |
 | Visualización SVG del layout del rollo | ⏳ Pendiente (no obligatoria) | Prompt futuro |
-| Histórico avanzado con métricas | ⏳ Pendiente | Prompt 9 |
-| Exportación a Excel para Verifactu | ⏳ Pendiente | Prompt 10 |
+| Panel de métricas admin | ⏳ Pendiente | Prompt 10 |
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
@@ -785,11 +785,11 @@ Espe puede subir el margen en el panel admin si quiere aplicar un recargo adicio
 
 25. **Aislamiento RLS por operador (opcional).** Actualmente Sonia (operador) puede VER y descargar cualquier presupuesto de la app, no solo los suyos. Coherente con las políticas RLS del Prompt 2 y con el flujo real de un taller pequeño donde todos ayudan a todos. Si Espe/Mohamed piden aislamiento estricto (que Sonia solo vea SUS presupuestos), es un cambio de políticas RLS de la tabla `presupuestos` que afecta también al listado, ficha y preview HTML.
 
-26. **[RESUELTO en Patch 8A] Ubicación "Gorra" eliminada del enum `Ubicacion`.** Alan detectó durante la validación del Prompt 8 que la opción "Gorra" en el selector de ubicación de logos es incorrecta conceptualmente: una gorra es una PRENDA, no una posición sobre una prenda. Si Ancora personaliza gorras, la gorra va en el catálogo de prendas (`prendas`). Lo que se hizo:
-    - `Ubicacion` (`src/lib/calculos/types.ts`) y `Posicion` (`src/types/database.ts`) pasan a `'pecho' | 'espalda' | 'manga' | 'otro'`.
-    - `NOMBRE_POSICION` (`descripciones.ts`), el selector compartido `SelectorPosicion` (`campos.tsx`) y los esquemas Zod de DTF y bordado dejan de incluir `'gorra'`. Serigrafía, impresión directa y sublimación no necesitaron cambios: los dos primeros ya restringían a pecho/espalda y sublimación reutiliza el selector compartido.
-    - El enum `posicion` de Postgres **no se tocó**: sigue admitiendo `'gorra'` como valor legado. El tipo de TypeScript es más estrecho que el de la BD a propósito, y así queda documentado en un comentario en `database.ts`.
-    - `leerPosicion` (`cargar-wizard.ts`) ya tenía respaldo a `"pecho"` para valores desconocidos, así que una línea legada con `'gorra'` se reabre en el wizard como pecho en vez de romper.
+26. **Ubicación "Gorra" en el enum `Ubicacion` — a eliminar en mini-patch 8A.** Alan detectó durante la validación del Prompt 8 que la opción "Gorra" en el selector de ubicación de logos es incorrecta conceptualmente: una gorra es una PRENDA, no una posición sobre una prenda. Actualmente el enum `Ubicacion = 'pecho' | 'espalda' | 'manga' | 'gorra' | 'otro'` (definido en `src/lib/calculos/types.ts`) permite elegir "Gorra" como si fuera una posición equivalente a "Pecho" o "Espalda". **Cambio pendiente en mini-patch 8A:**
+    - Eliminar `'gorra'` del enum `Ubicacion`.
+    - Actualizar todos los formularios (DTF simple, DTF compuesto, bordado, serigrafía, impresión directa, sublimación) para que no ofrezcan "Gorra".
+    - Verificar si hay presupuestos ya creados con `posicion = 'gorra'` en la BD (probablemente no).
+    - Si Ancora hace personalización sobre gorras, la gorra debe estar en el catálogo de prendas (`prendas`), no en el enum de ubicación.
 
 27. **Visualización SVG del layout del rollo — pendiente futuro no obligatorio.** `componerDTF()` ya devuelve las coordenadas (x, y) exactas de cada logo en el rollo, y el snapshot las guarda en `detalle_calculo.layout`. Sonia solicitó (Prompt 8, decisión 3) que en el futuro se pinte un mini-diagrama del rollo con los rectángulos de cada logo en su posición. Se decidió no incluirlo en Prompt 8 para no alargar el prompt. **Cuando se implemente:** componente React SVG que reciba `layout` del snapshot y pinte:
     - Un rectángulo por cada logo con sus coordenadas.
@@ -1113,23 +1113,69 @@ Los warnings del algoritmo funcionaron correctamente en producción (ej: "El log
 **Estado de tests:** 234/234 tests passing (223 previos + 11 nuevos del Prompt 8, superior a los ~5 estimados).
 
 **Observaciones detectadas durante la validación (documentadas como pendientes):**
-- Nota 26: ubicación "Gorra" en el enum `Ubicacion` — la gorra es una prenda, no una posición sobre una prenda. **Resuelto en el Patch 8A.**
+- Nota 26: ubicación "Gorra" en el enum `Ubicacion` — a eliminar en mini-patch 8A (la gorra es una prenda, no una posición sobre una prenda).
 - Sección 13.9: micro-deuda técnica preexistente del Prompt 5 sobre `downlevelIteration`.
 
-### Patch 8A — Eliminación de la ubicación "Gorra"
+### Patch 8A — Eliminar ubicación "Gorra" del enum
 
-Mini-patch acotado tras el cierre del Prompt 8. Solo enum + formularios: sin lógica nueva, sin dependencias, sin migración SQL. Ver nota 26 (sección 10) para el detalle de los archivos tocados.
+Aplicado tras Prompt 8 para resolver la observación de Alan durante la validación. Cambio acotado, sin lógica nueva, sin migración SQL.
 
-**Decisiones técnicas:**
+**Cambios realizados:**
 
-1. **El enum de Postgres no se modifica; el tipo de TypeScript se estrecha.** El tipo `Posicion` de la app queda más restrictivo que el enum `posicion` de la BD, que sigue aceptando `'gorra'`. Estrechar el tipo impide crear líneas nuevas con esa posición, que es el objetivo, mientras que un `ALTER TYPE` obligaría a migrar cualquier fila legada y a coordinar el despliegue. El desajuste está documentado con un comentario en `src/types/database.ts` para que nadie lo lea como un olvido.
+1. **Enum `Ubicacion` reducido a `pecho | espalda | manga | otro`** en `src/lib/calculos/types.ts`.
+2. **Esquemas Zod actualizados** en `FormularioDetallesDTF.tsx:32` y `FormularioDetallesBordado.tsx:28`. Serigrafía e impresión directa ya restringían a `pecho | espalda` por diseño de tarifa. Sublimación usa el selector compartido.
+3. **Test en `composicion-dtf.test.ts:475`** — un logo se llamaba "Gorra" como etiqueta libre (`LogoInput.nombre`, no un valor del enum). Renombrado a "Bolsillo" para dejar el `grep` limpio.
 
-2. **Sin ruta de migración de datos.** Los presupuestos legados con `posicion = 'gorra'` (si los hubiera) se conservan tal cual: son documentos comerciales inmutables y su `detalle_calculo` es un snapshot. Al reabrirse en el wizard, `leerPosicion` los normaliza a `"pecho"` por su respaldo ya existente. Consulta de comprobación pendiente de ejecutar por Alan en el SQL Editor de Supabase.
+**Decisión inteligente: la BD NO se tocó.** El enum `posicion` de Postgres sigue admitiendo `'gorra'`. El tipo de TypeScript es ahora **deliberadamente más estrecho** que el de la BD: impide crear líneas nuevas con esa posición sin obligar a migrar datos legados. Si hubiera alguna línea antigua con `'gorra'`, al reabrirla en el wizard `leerPosicion` la normaliza a `'pecho'` por su respaldo ya existente — no rompe. Consulta de verificación ejecutada por Alan: **0 presupuestos con `posicion = 'gorra'`** (dato legacy inexistente).
 
-3. **Un logo de test se renombró de "Gorra" a "Bolsillo"** en `composicion-dtf.test.ts`. Era una etiqueta de texto libre (`LogoInput.nombre`), no un valor del enum, así que no rompía nada — se cambió únicamente para que `grep -r "gorra" src/` no devuelva falsos positivos en el futuro.
+**Estado de tests:** 234/234 tests siguen passing. Cambio de `+33 -17` líneas.
 
-**Estado de tests:** 234/234 tests passing (ningún test dependía de `'gorra'` como valor de ubicación). `npm run build` sin errores.
+### Prompt 9 — Exportación Excel para Verifactu
+
+Genera un archivo `.xlsx` con 3 pestañas para dos usos: facturación (importación al futuro software Verifactu) y análisis de negocio.
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- **Formato genérico universal** (sin adaptar a software fiscal específico, aún por decidir).
+- **3 pestañas:** Facturables (solo aceptados) / Todos (con colores por estado) / Detalle líneas.
+- **Exportación manual desde `/admin/exportacion`** — sin cron.
+- **Formato `.xlsx` real** con `exceljs`.
+- **Flag `enviado_a_facturacion`** — se marca solo los aceptados de la pestaña 1 tras exportar.
+- **Filtro de fecha flexible** — dropdown para elegir entre `fecha_emision` o `accepted_at`.
+
+**Decisiones técnicas de implementación (tomadas por Claude Code durante el prompt):**
+
+1. **`accepted_at` se filtra en hora de Madrid, no en UTC.** `fecha_emision` es una columna `date` sin ambigüedad, pero `accepted_at` es `timestamptz`. Sin convertir, un presupuesto aceptado a la 01:00 del 1 de agosto (23:00 UTC del 31 de julio en verano) se colaría en la exportación de julio. `consultas.ts` calcula los límites del rango a partir de la hora de pared de Madrid, con doble iteración para el cambio de hora. Bug fiscal silencioso evitado.
+
+2. **Consultas paginadas y troceadas.** PostgREST corta las respuestas a 1.000 filas por petición y las cláusulas `in(...)` viajan en la URL con límite de longitud. Sin paginar, un volcado grande se truncaría en silencio — inaceptable en facturación. Se pagina de 1.000 en 1.000 y se trocean los ids en lotes de 100 para el `update` del flag.
+
+3. **Séptimo archivo `estilos.ts`** (el prompt listaba 6). Los tres formateadores comparten estilo; meterlo en `generarExcel.ts` crearía un ciclo de imports porque ese módulo ya los importa a ellos. Sacado a archivo aparte.
+
+4. **Fechas como fecha real de Excel con `numFmt dd/mm/yyyy`, NO como texto.** Se escriben a medianoche UTC para que el número de serie sea entero y el día no se desplace. Consecuencia práctica: en la pestaña "Todos", Espe puede ordenar y filtrar por fecha en Excel de verdad, no alfabéticamente como pasaría con texto.
+
+5. **"Es composición DTF" se vuelca como texto `"true"/"false"`, no como booleano de Excel.** Un booleano se traduce a `VERDADERO/FALSO` en Excel español y `TRUE/FALSE` en inglés según el idioma. Texto plano es agnóstico y lo leerá cualquier importador programático sin problema de locale.
+
+6. **La pestaña 3 incluye también las líneas de tipo `prenda`** (el prompt solo mencionaba `tecnica` y `extra`). Las ventas de prenda son líneas reales del presupuesto y sin ellas el importe de la pestaña no cuadraría con el total facturado. La columna "Técnica" queda vacía en `extra` y `prenda`, como pedía el enunciado.
+
+7. **Descarga por `fetch + blob`, no enlace directo.** Permite pintar los errores dentro de la pantalla en vez de dejar al navegador enseñando un JSON crudo. Y leer las cabeceras HTTP personalizadas `X-Ancora-Marcados` / `X-Ancora-Total` para el mensaje de confirmación al usuario.
+
+8. **Atomicidad.** Primero se genera el Excel completo, y solo si eso sale bien se marca el flag con un único `update ... in (...)` por lote (atómico en Postgres). **Nunca queda un presupuesto marcado como "facturado" cuyo Excel no llegó a existir.**
+
+9. **Límite de 5.000 con confirmación inline** (no `window.confirm`), coherente con el patrón sin modales del resto de la app.
+
+**Nota menor:** `npm audit` reporta 10 vulnerabilidades tras instalar `exceljs`, todas en dependencias transitivas de desarrollo/empaquetado (`glob`, `rimraf`, `fstream` vía módulos de compresión). No afectan al código que corre en producción; se dejan sin acción.
+
+**Migración `20260810000000_exportacion_verifactu.sql` aplicada manualmente por Alan en Supabase SQL Editor.** Añade columna `enviado_a_facturacion timestamptz`, comentario descriptivo e índice `idx_presupuestos_enviado_facturacion`.
+
+**Validación real por Alan:** los 6 pasos del checklist pasaron.
+- Excel descargado con las 3 pestañas correctas.
+- Pestaña "Todos" muestra colores por estado (verde/azul/gris/rojo/amarillo).
+- Pestaña "Facturables" contiene solo el presupuesto aceptado 2026/000096/0 con IVA 12,50 € y total 72,04 €.
+- Pestaña "Detalle líneas" incluye correctamente las 2 filas (prenda + tecnica) del presupuesto aceptado.
+- Flag `enviado_a_facturacion` marcado solo en los aceptados verificados vía consulta SQL.
+- Sonia (operador) NO puede acceder a `/admin/exportacion`.
+
+**Estado de tests:** 242/242 tests passing (234 previos + 8 nuevos, superior a los ~5 estimados).
 
 ---
 
-*Última actualización del documento: agosto 2026 tras cierre del Patch 8A. **Último pendiente obligatorio de Fase 1 completado.** Sistema con composición DTF avanzada operativa.*
+*Última actualización del documento: agosto 2026 tras cierre de Prompt 9. Sistema con exportación Excel operativa. Solo queda el Prompt 10 (métricas admin, opcional) para llegar al 100% de Fase 1.*
