@@ -12,13 +12,21 @@ interface EnlaceAdmin {
 interface GrupoAdmin {
   titulo: string;
   enlaces: EnlaceAdmin[];
+  /** Si es true, el grupo solo se pinta para admin (Prompt 10). */
+  soloAdmin?: boolean;
 }
 
 const SECCIONES: GrupoAdmin[] = [
   { titulo: "", enlaces: [{ href: "/admin", etiqueta: "Resumen" }] },
-  { titulo: "", enlaces: [{ href: "/admin/prendas", etiqueta: "Prendas" }] },
+  { titulo: "", enlaces: [{ href: "/admin/metricas", etiqueta: "Métricas" }] },
+  {
+    titulo: "",
+    enlaces: [{ href: "/admin/prendas", etiqueta: "Prendas" }],
+    soloAdmin: true,
+  },
   {
     titulo: "Tarifas",
+    soloAdmin: true,
     enlaces: [
       { href: "/admin/tarifas/dtf", etiqueta: "DTF" },
       { href: "/admin/tarifas/bordado", etiqueta: "Bordado" },
@@ -28,22 +36,41 @@ const SECCIONES: GrupoAdmin[] = [
       { href: "/admin/tarifas/picaje", etiqueta: "Picaje" },
     ],
   },
-  { titulo: "", enlaces: [{ href: "/admin/margenes", etiqueta: "Márgenes" }] },
-  { titulo: "", enlaces: [{ href: "/admin/costes", etiqueta: "Costes operativos" }] },
-  { titulo: "", enlaces: [{ href: "/admin/proveedores", etiqueta: "Proveedores" }] },
+  {
+    titulo: "",
+    enlaces: [{ href: "/admin/margenes", etiqueta: "Márgenes" }],
+    soloAdmin: true,
+  },
+  {
+    titulo: "",
+    enlaces: [{ href: "/admin/costes", etiqueta: "Costes operativos" }],
+    soloAdmin: true,
+  },
+  {
+    titulo: "",
+    enlaces: [{ href: "/admin/proveedores", etiqueta: "Proveedores" }],
+    soloAdmin: true,
+  },
   {
     titulo: "",
     enlaces: [{ href: "/admin/exportacion", etiqueta: "Exportación Excel" }],
+    soloAdmin: true,
   },
 ];
 
-export function AdminSidebar() {
+interface Props {
+  /** Un operador solo ve Resumen y Métricas: el resto le daría acceso denegado. */
+  esAdmin: boolean;
+}
+
+export function AdminSidebar({ esAdmin }: Props) {
   const pathname = usePathname();
+  const secciones = SECCIONES.filter((grupo) => esAdmin || !grupo.soloAdmin);
 
   return (
     <aside className="w-56 shrink-0 border-r border-border p-4">
       <nav className="space-y-5">
-        {SECCIONES.map((grupo, indice) => (
+        {secciones.map((grupo, indice) => (
           <div key={indice}>
             {grupo.titulo && (
               <p className="mb-1.5 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -61,6 +88,7 @@ export function AdminSidebar() {
                   <Link
                     key={enlace.href}
                     href={enlace.href}
+                    aria-current={activo ? "page" : undefined}
                     className={cn(
                       "block rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
                       activo

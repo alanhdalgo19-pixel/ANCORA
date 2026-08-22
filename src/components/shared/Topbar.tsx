@@ -66,7 +66,12 @@ export function Topbar({ nombre, rol }: TopbarProps) {
         <nav className="flex h-full items-center gap-4">
           <EnlaceNav href="/presupuestos">Presupuestos</EnlaceNav>
           <EnlaceNav href="/clientes">Clientes</EnlaceNav>
+          {/* Desde el Prompt 10 el operador también entra al panel, pero solo
+              a las métricas: se le enseña ese destino directamente. */}
           {rol === "admin" && <EnlaceNav href="/admin">Admin</EnlaceNav>}
+          {rol === "operador" && (
+            <EnlaceNav href="/admin/metricas">Métricas</EnlaceNav>
+          )}
         </nav>
       </div>
 
