@@ -711,8 +711,12 @@ Estado a fecha de la última actualización del documento.
 | Composición DTF avanzada integrada en wizard | ✅ Completado | Prompt 8 |
 | Ubicación "Gorra" eliminada del enum | ✅ Completado | Patch 8A |
 | Exportación Excel para Verifactu (3 pestañas) | ✅ Completado | Prompt 9 |
+| Panel de métricas admin (widget + dashboard) | ✅ Completado | Prompt 10 |
 | Visualización SVG del layout del rollo | ⏳ Pendiente (no obligatoria) | Prompt futuro |
-| Panel de métricas admin | ⏳ Pendiente | Prompt 10 |
+
+**🎉 FASE 1 COMPLETADA AL 100% 🎉**
+
+Todos los prompts obligatorios de Fase 1 están cerrados. El sistema es operativo de punta a punta y listo para uso real en Ancora Publicitat.
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
@@ -1176,6 +1180,111 @@ Genera un archivo `.xlsx` con 3 pestañas para dos usos: facturación (importaci
 
 **Estado de tests:** 242/242 tests passing (234 previos + 8 nuevos, superior a los ~5 estimados).
 
+### Prompt 10 — Panel de métricas admin
+
+**Último prompt de Fase 1.** Crea el panel de métricas con widget resumen en `/admin` y dashboard completo en `/admin/metricas`.
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- Métricas mixtas con foco comercial (85% comerciales, 15% técnicas).
+- Selector de período: mes actual (default), mes anterior, trimestre, año, rango custom.
+- Widget resumen en `/admin` + dashboard completo en `/admin/metricas`.
+- Acceso para admin Y operador — Sonia también accede.
+- Todos ven exactamente los mismos números (sin ocultar importes por rol).
+- Sin librería de gráficos evolutivos — barras horizontales con Tailwind puro.
+
+**Decisiones técnicas de implementación (tomadas por Claude Code durante el prompt):**
+
+**Cosas del prompt que no cuadraban con el código real:**
+
+1. **`presupuestos.updated_at` no existe.** El prompt lo daba por hecho para "borradores olvidados". Con la restricción de no migrar, la antigüedad se mide desde `created_at` convertido a día de Madrid. Si Espe quiere literalmente "sin tocar desde hace 7 días", hará falta columna + trigger. Queda como nota pendiente.
+
+2. **La tabla es `precios_prenda`, NO `prendas_precios`.** Además, ahora cuentan como "sin precio" también las prendas activas que no tienen NINGUNA fila de precio; el aviso viejo del `/admin` solo miraba las que tenían filas a 0.
+
+3. **Rangos como string ISO YYYY-MM-DD, no `Date`.** `fecha_emision` es un `date` de Postgres, no un `timestamp`. Pasar `Date` de JavaScript obligaría a re-decidir a qué instante corresponde el día, que es exactamente donde el Prompt 9 encontró el bug de zona horaria.
+
+4. **Enlace "clientes incompletos" va a `/clientes` sin filtro.** Ese filtro no existe en el listado; añadir un query param inerte sería peor que no ponerlo.
+
+**Arquitectura de acceso (el cambio más grande):**
+
+5. **El gate de admin baja un nivel.** `/admin/layout.tsx` pasa a admitir `admin` y `operador`; cada carpeta de configuración (`prendas`, `tarifas`, `margenes`, `costes`, `proveedores`, `usuarios`, `exportacion`) recibe un `layout.tsx` de 3 líneas que reexporta `LayoutSoloAdmin`. Frente a comprobar el rol página a página (20+ sitios), así una página nueva dentro de esas carpetas queda protegida sola. Defensa arquitectónica.
+
+6. **Topbar: el operador ve una pestaña "Métricas"** que apunta a `/admin/metricas`. Antes no tenía ninguna forma de llegar al panel.
+
+7. **La sidebar filtra los enlaces de configuración** para operador, y el bloque 5 le oculta los enlaces `/admin/*` (le darían acceso denegado) **sin ocultarle las cifras** — transparencia total, decisión A.5.
+
+**Criterios de negocio que el prompt dejaba abiertos:**
+
+8. **Ratio de conversión:** divisor = aceptados + rechazados + caducados. Borradores y enviados siguen vivos y no penalizan.
+
+9. **Distribución por técnica:** el recuento usa todos los estados; el importe solo los aceptados (es lo que significa "facturado" — un rechazado grande falsearía el reparto). La pantalla lo rotula "Importe aceptado por técnica". Los extras se imputan a la técnica de su `linea_padre_id`; las líneas de tipo `prenda` quedan fuera.
+
+10. **"Período anterior equivalente":** ventana de la misma longitud inmediatamente anterior. Es la única definición que funciona igual para los cinco períodos, incluido el rango personalizado.
+
+11. **Alertas:** "sin respuesta" y "borradores olvidados" se listan sobre todo el histórico, no sobre el período; "caducados" sí sobre el período (literal del enunciado, y tiene sentido: son avisos de seguimiento, esconderlos por estar mirando agosto sería lo contrario de lo que se busca).
+
+**Implementación:**
+
+12. **El período vive en la URL** (`?periodo=…&desde=…&hasta=…`), no en state de React: la página sigue siendo Server Component, el rango es enlazable y el botón "atrás" funciona. La Server Action `obtenerMetricas` mantiene igualmente el guard de rol (defensa en profundidad).
+
+13. **Sexto archivo en `lib/metricas/`: `umbrales.ts`** (el prompt listaba cinco). Los umbrales de 20 y 7 días los usan tanto el prefiltro SQL como la función pura; en un solo sitio no pueden desalinearse.
+
+14. **`/admin` pierde la tarjeta "Presupuestos este mes"** (la duplicaba el widget) y sus avisos pasan a usar `cargarEstadoCatalogo`, compartido con el bloque 5.
+
+**Micro-deuda pendiente reportada:** `npx tsc --noEmit` sigue reportando solo el error preexistente de `downlevelIteration` en `composicion-dtf.test.ts:605` (sección 13.9). No se tocó ese archivo. Sigue sin bloquear nada.
+
+**Validación real por Alan:** todos los checkpoints verificados en producción.
+- Widget en `/admin` con 4 tarjetas del mes en curso.
+- Selector de período funcional (mes actual → mes anterior recalcula correctamente).
+- Bloque 1 (Actividad): 5 presupuestos emitidos, comparativa +25% vs período anterior, total en cotización 179,25 €, total aceptado 72,04 €, ratio 100%.
+- Bloque 2 (Top clientes): Doyle Náutica 72,04 € por volumen, y por número Doyle (4) + Barceló (1).
+- Bloque 3 (Distribución técnica): DTF 100% en presencia, y en importe DTF 59,54 € (el caso canónico).
+- Bloque 4 (Alertas): 2 sin respuesta con antigüedad calculada en días desde Madrid (correcto), enlaces funcionales al presupuesto.
+- Bloque 5 (Catálogo): avisos de configuración pendiente.
+- Sonia (operador) ve el mismo dashboard y no puede acceder a `/admin/tarifas/*`.
+
+**Estado de tests:** 260/260 tests passing (242 previos + 18 nuevos, muy superior a los ~6 estimados).
+
 ---
 
-*Última actualización del documento: agosto 2026 tras cierre de Prompt 9. Sistema con exportación Excel operativa. Solo queda el Prompt 10 (métricas admin, opcional) para llegar al 100% de Fase 1.*
+## 🎉 FASE 1 COMPLETADA AL 100% 🎉
+
+**11 sesiones cerradas oficialmente:**
+
+| # | Sesión | Contenido |
+|---|--------|-----------|
+| 1 | Bootstrap | Next.js + Tailwind + Supabase + estructura inicial |
+| 2 | Prompt 1 | Autenticación real + roles + usuarios iniciales |
+| 3 | Prompt 2 | RLS y CRUD de clientes |
+| 4 | Prompt 3 | Panel de administración completo |
+| 5 | Prompt 4 | Motor de cálculo con 145 tests |
+| 6 | Patch 4A | Márgenes provisionales a 0% |
+| 7 | Prompt 5 | Composición DTF con bin packing (Shelf + FFD) |
+| 8 | Prompt 6 | Wizard de presupuesto multi-paso |
+| 9 | Prompt 7 | PDF real descargable + fix fiscal del transporte |
+| 10 | Patch 7A | Pulido visual + logo real + email corporativo |
+| 11 | Prompt 8 | Composición DTF avanzada integrada en wizard |
+| 12 | Patch 8A | Eliminar ubicación "Gorra" del enum |
+| 13 | Prompt 9 | Exportación Excel para Verifactu (3 pestañas) |
+| 14 | Prompt 10 | Panel de métricas admin (widget + dashboard) |
+
+**Métricas finales:**
+- ~28.000 líneas de código
+- **260/260 tests passing**
+- 17 tablas de BD con RLS
+- ~22 rutas funcionales
+- 6 técnicas de personalización con motor puro
+- PDFs profesionales archivados en Storage
+- Bin packing 2D operativo (composición DTF)
+- Sistema fiscalmente correcto (Verifactu-ready)
+- Exportación Excel con 3 pestañas
+- Panel de métricas con 5 bloques + widget resumen
+
+**Sistema listo para uso real en Ancora Publicitat.** Solo depende de datos externos:
+- Precios de las 13 prendas top (Espe cuando vuelva)
+- Tarifa de sublimación completa (Espe)
+- Logo vectorial SVG (opcional, PNG actual funciona)
+- Firma comercial con Mohamed
+
+---
+
+*Última actualización del documento: agosto 2026 tras cierre de Prompt 10. **FASE 1 COMPLETADA AL 100%.** Sistema operativo de punta a punta.*
