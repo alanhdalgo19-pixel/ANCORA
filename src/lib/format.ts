@@ -56,6 +56,19 @@ export function sumarDiasISO(iso: string, dias: number): string {
   return fecha.toISOString().slice(0, 10);
 }
 
+/** 46080 → "45 KB"; 1258291 → "1,2 MB". Tamaños de archivo para la interfaz. */
+export function formatTamanoArchivo(bytes: number | null | undefined): string {
+  const numero = Number(bytes ?? 0);
+  if (!Number.isFinite(numero) || numero <= 0) return "—";
+  if (numero < 1024) return `${Math.round(numero)} B`;
+
+  const kilobytes = numero / 1024;
+  if (kilobytes < 1024) return `${Math.round(kilobytes)} KB`;
+
+  const megabytes = kilobytes / 1024;
+  return `${megabytes.toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB`;
+}
+
 /** 9.5 → "9,5" (medidas en cm, sin decimales inútiles). */
 export function formatMedida(valor: number | string | null | undefined): string {
   const numero = Number(valor ?? 0);

@@ -52,6 +52,18 @@ const config: Config = {
           "primary-light": "var(--ancora-primary-light)",
         },
       },
+      keyframes: {
+        // Barra de progreso indeterminada de la subida de logos (F2.1): una
+        // Server Action no informa del progreso real de la transferencia, así
+        // que la barra indica "en marcha", no un porcentaje.
+        "barra-indeterminada": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(300%)" },
+        },
+      },
+      animation: {
+        "barra-indeterminada": "barra-indeterminada 1.1s ease-in-out infinite",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

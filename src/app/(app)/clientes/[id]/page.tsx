@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Star } from "lucide-react";
 import { createClient, getUserRole } from "@/lib/supabase/server";
+import { resumenLogosDeCliente } from "@/lib/logos/consultas";
 import { Button } from "@/components/ui/button";
 import { TipoClienteBadge } from "@/components/clientes/TipoClienteBadge";
 import { cambiarTipoCliente, desactivarCliente } from "../actions";
@@ -33,6 +35,7 @@ export default async function FichaClientePage({
     notFound();
   }
 
+  const logos = await resumenLogosDeCliente(supabase, cliente.id);
   const esAdmin = rol === "admin";
   const nuevoTipo = cliente.tipo_cliente === "habitual" ? "esporadico" : "habitual";
 
@@ -89,6 +92,42 @@ export default async function FichaClientePage({
           </form>
         )}
       </div>
+
+      <section className="rounded-lg border border-border p-4">
+        <h2 className="text-sm font-semibold text-foreground">Logos</h2>
+
+        {logos.total === 0 ? (
+          <>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Este cliente aún no tiene logos guardados.
+            </p>
+            <Button asChild variant="outline" size="sm" className="mt-3">
+              <Link href={`/clientes/${cliente.id}/logos`}>+ Añadir logo</Link>
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Este cliente tiene {logos.total}{" "}
+              {logos.total === 1 ? "logo guardado" : "logos guardados"}.
+            </p>
+            {logos.principal && (
+              <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground">
+                <Star
+                  className="h-3.5 w-3.5 fill-current text-ancora-primary"
+                  aria-hidden="true"
+                />
+                Principal: {logos.principal.nombre}
+              </p>
+            )}
+            <Button asChild variant="outline" size="sm" className="mt-3">
+              <Link href={`/clientes/${cliente.id}/logos`}>
+                Gestionar logos →
+              </Link>
+            </Button>
+          </>
+        )}
+      </section>
 
       <section className="rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold text-foreground">

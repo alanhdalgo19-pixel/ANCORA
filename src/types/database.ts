@@ -1,6 +1,12 @@
 // Tipos del dominio — reflejan el esquema de CLAUDE.md sección 6.
 // Los nombres de tabla/columna se mantienen en snake_case (espejo de SQL).
 
+// La lista de formatos de logo vive en `src/lib/logos/validar.ts` porque de ahí
+// la consumen también el navegador y los tests; aquí se reexporta el tipo para
+// que las interfaces de este archivo no dupliquen la enumeración.
+import type { FormatoLogo } from "@/lib/logos/validar";
+export type { FormatoLogo };
+
 export type Rol = "admin" | "operador" | "consulta";
 export type TipoCliente = "esporadico" | "habitual";
 export type TipoProveedor = "urgencia" | "precio" | "calidad";
@@ -57,6 +63,26 @@ export interface Cliente {
   condiciones_pago: string | null;
   activo: boolean;
   created_at: string;
+}
+
+/**
+ * Biblioteca de logos del cliente (F2.1). Un cliente tiene 0-N logos guardados
+ * para reutilizarlos en presupuestos; a partir de F2.3 el wizard permitirá
+ * elegir uno de aquí o subir uno puntual.
+ */
+export interface LogoCliente {
+  id: string;
+  cliente_id: string;
+  nombre: string;
+  storage_path: string;
+  formato: FormatoLogo;
+  tamano_bytes: number;
+  ancho_px: number | null;
+  alto_px: number | null;
+  es_principal: boolean;
+  subido_por: string | null;
+  subido_at: string;
+  notas: string | null;
 }
 
 export interface Proveedor {

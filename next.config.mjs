@@ -17,6 +17,15 @@ const nextConfig = {
     outputFileTracingIncludes: {
       "/**": ["./public/logo-ancora.png"],
     },
+
+    // La subida de logos (F2.1) viaja por una Server Action y el tope de
+    // archivo son 5 MB (`TAMANO_MAX_BYTES`). El límite por defecto de Next
+    // para el cuerpo de una Server Action es 1 MB, así que un logo grande
+    // fallaría con un error genérico antes de llegar a nuestra validación.
+    // 6 MB deja margen para el resto de campos del formulario.
+    serverActions: {
+      bodySizeLimit: "6mb",
+    },
   },
 };
 
