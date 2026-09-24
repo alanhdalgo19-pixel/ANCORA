@@ -718,6 +718,19 @@ Estado a fecha de la última actualización del documento.
 
 Todos los prompts obligatorios de Fase 1 están cerrados. El sistema es operativo de punta a punta y listo para uso real en Ancora Publicitat.
 
+---
+
+## FASE 2 — Fotomontaje sobre prenda (EN PROGRESO)
+
+Fase 2 se descompone en 4 prompts incrementales para reducir riesgo y facilitar validación:
+
+| Prompt | Contenido | Estado |
+|--------|-----------|--------|
+| **F2.1** | Infraestructura: biblioteca de logos por cliente + bucket Supabase Storage | ✅ Completado |
+| **F2.2** | Componente Mockup con SVG puro + pantalla de prueba `/mockup-test` | ✅ Completado |
+| **F2.3** | Integrar mockup en wizard (paso 4) + hub + preview HTML + PDF real | ⏳ Siguiente |
+| **F2.4** | Sustituir rectángulo abstracto por fotos reales de prendas por proveedor | ⏳ Pendiente |
+
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
 | Nombre | Email | Rol | Notas |
@@ -1288,3 +1301,132 @@ Genera un archivo `.xlsx` con 3 pestañas para dos usos: facturación (importaci
 ---
 
 *Última actualización del documento: agosto 2026 tras cierre de Prompt 10. **FASE 1 COMPLETADA AL 100%.** Sistema operativo de punta a punta.*
+
+---
+
+### Prompt F2.1 — Infraestructura de biblioteca de logos por cliente
+
+Primer prompt de Fase 2. Sube la base sobre la que se construye todo el fotomontaje: cada cliente tiene su propia biblioteca de logos, gestionable desde la ficha del cliente.
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- Biblioteca de logos por cliente + subida puntual (Sonia puede reutilizar el logo o subir uno específico).
+- Formatos aceptados: raster (PNG, JPG) y vectorial (SVG, PDF).
+- Sin fotos de prenda todavía (modo abstracto en F2.2).
+- Un solo bucket `logos-clientes` organizado por `{cliente_id}/`.
+- Peso máximo 5 MB por archivo.
+
+**Decisiones técnicas de implementación (tomadas por Claude Code):**
+
+1. **`next.config.mjs`: `serverActions.bodySizeLimit` a 6 MB.** El tope por defecto de Next para el cuerpo de una Server Action es 1 MB. Sin este cambio, un logo de 3 MB fallaría con un error genérico de plataforma antes de llegar a nuestra validación de 5 MB. El buffer de 1 MB extra cubre el overhead HTTP.
+
+2. **`subirLogo` recibe `FormData`, no un objeto con campos sueltos.** El archivo viaja dentro; es como el navegador serializa un `File` hacia una Server Action y evita depender de la serialización de `File` como argumento posicional. El resto de acciones sí llevan argumentos tipados.
+
+3. **Barra de progreso indeterminada, no porcentual.** Una Server Action no expone el progreso de la transferencia (haría falta un route handler + XHR). Se añadió el keyframe `barra-indeterminada` a `tailwind.config.ts`: indica "en marcha", no un porcentaje. Con 5 MB de tope la subida es de un par de segundos.
+
+4. **El primer logo de un cliente se marca principal automáticamente.** Una biblioteca con un único logo y ninguno señalado no le sirve a F2.3, que sugerirá el principal por defecto en el wizard. El checkbox "marcar como principal" solo aparece cuando ya hay otros logos.
+
+5. **Al eliminar el logo principal no se promociona otro.** El cliente queda sin principal hasta que alguien marque uno. Promocionar "el siguiente" sería arbitrario.
+
+6. **Orden de borrado invertido respecto al prompt: primero la fila, después el objeto.** Si falla el borrado del objeto queda un archivo huérfano en el bucket —invisible e inofensivo, se registra en el log—; al revés quedaría una fila apuntando a un archivo inexistente, que es lo que sí rompe la pantalla con una miniatura muerta.
+
+7. **`ancho_px` / `alto_px` se rellenan para PNG y JPG.** Se leen de la cabecera del archivo sin librerías (chunk IHDR y marcadores SOF). En SVG y PDF quedan `null`: sus medidas son unidades de documento (mm, pt, viewBox) y traducirlas es trabajo de F2.2. Salían gratis y F2.2 las necesita para escalar el logo sobre la prenda.
+
+8. **Archivo extra `AccionesLogo.tsx` no previsto en la estructura del prompt.** Permite que `ListaLogos.tsx` siga siendo Server Component (como pedía el prompt) aislando en un Client Component lo único que necesita estado: el campo de renombrar y la confirmación de borrado en línea.
+
+9. **Validación de SVG más estricta que "empieza por `<?xml>` o `<svg>`".** Se aceptan también los arranques por comentario y por DOCTYPE (SVGs legítimos) pero se exige además que `<svg` aparezca en los primeros 4 KB: así no cuela un HTML renombrado que empieza por `<!DOCTYPE`. Defensa contra XSS.
+
+10. **`consulta` no ve ningún botón de acción.** El prompt solo especificaba el reparto admin/operador. Un rol de solo lectura viendo botones que van a fallar es peor que no verlos: la pantalla le muestra la biblioteca sin zona de subida ni acciones.
+
+11. **18 tests en vez de los ~5 estimados.** Los 5 del enunciado más: límite exacto de 5 MB, archivo vacío, normalización `image/jpeg` → `jpg`, seis de firma de contenido (incluido el ejecutable renombrado a `.png`) y cuatro de lectura de dimensiones.
+
+12. **`formatTamanoArchivo` añadido a `src/lib/format.ts`.** Es formateo de interfaz genérico, no específico de logos, y vive junto a `formatEuros` / `formatFecha`.
+
+**Migración `20260901000000_logos_clientes.sql` aplicada manualmente por Alan en Supabase SQL Editor.** Crea tabla `logos_clientes`, índices, políticas RLS de tabla y de Storage bucket.
+
+**Bucket creado con `npm run setup:logos`** (script Node idempotente en `scripts/setup_logos_bucket.mjs`). Configuración final: privado, 5 MB, acepta `image/png`, `image/jpeg`, `image/svg+xml`, `application/pdf`.
+
+**Validación real por Alan:** biblioteca operativa en `/clientes/[id]/logos` para Doyle Náutica con 2 logos subidos (h10-hotels-logo PNG 33KB 526×350 marcado principal; ChatGPT Image PNG 1,7MB 1122×1134). Drag & drop funcional, thumbnails visibles, marcar principal desmarca el anterior, Sonia (operador) puede subir pero NO eliminar.
+
+**Estado de tests:** 278/278 tests passing (260 previos + 18 nuevos).
+
+### Prompt F2.2 — Componente Mockup con SVG puro + pantalla de prueba
+
+Segundo prompt de Fase 2. Coge un logo de la biblioteca (F2.1) y lo pinta sobre una "prenda abstracta" con las dimensiones reales que Sonia especificará en el wizard. Aún NO se integra en el wizard ni en el PDF (eso es F2.3).
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- SVG con React puro (sin dependencias nuevas).
+- Prenda como rectángulo simple (modo abstracto). Sin siluetas ni fotos reales todavía.
+- Escala fija del contenedor (la prenda ocupa un tamaño fijo en pantalla, el logo se escala proporcionalmente).
+- Componente reutilizable + pantalla de prueba `/mockup-test` (solo admin, oculta de la topbar).
+
+**Decisiones técnicas de implementación (tomadas por Claude Code):**
+
+1. **Medidas de las áreas imprimibles.** Polo pecho 28×18 cm, espalda 32×40 y manga 9×9. Elegidas para que los casos del checklist salgan como se espera: 9×4 cabe, 20×20 y 20×25 se pasan del pecho, 25×30 cabe en la espalda y 40×50 no. Chaleco no tiene manga; delantal y toalla no tienen ni espalda ni manga. En la toalla, "pecho" es la franja de abajo.
+
+2. **La manga es una zona de la esquina superior izquierda**, porque un rectángulo no tiene manga. Lo que cuenta es su tamaño máximo.
+
+3. **Cuándo se considera que el logo se pasa:** si el ancho o el alto del logo son mayores que los del área. Los 2 cm de margen superior se reducen cuando el logo cabe pero no le queda sitio para el margen entero. Así, un logo que cabe no aparece marcado en rojo.
+
+4. **Si el logo se pasa**, se sigue centrando en el área y sobresale lo mismo por cada lado, con borde rojo y el aviso "(máx. 28 × 18 cm)".
+
+5. **Los textos crecen con la prenda.** Su tamaño está en cm de prenda, así que al pasar de 400 a 800 px se duplica todo, también los textos (test 6). Por eso el título va dentro del rectángulo y no en una franja fija por encima.
+
+6. **Un tipo de prenda desconocido se pinta como "otro" con un aviso**, en vez de romper la pantalla. Lo mismo con medidas de 0 o vacías: sale un aviso y no se dibuja el logo.
+
+7. **La dirección del logo es `/api/logos/{id}`**, que ya existía desde F2.1 y redirige a la URL firmada del almacenamiento. No hace falta generar URLs firmadas en la pantalla de prueba.
+
+8. **Los logos en PDF aparecen en el selector pero no se pueden elegir** ("PDF, no previsualizable"), porque un PDF no se puede dibujar dentro del SVG. Hay además una opción "Sin logo" para probar ese caso.
+
+9. **La Server Action vuelve a comprobar que el usuario es admin**, aunque la página ya esté protegida por el layout, porque una Server Action se puede llamar desde fuera. El id del cliente se valida con `z.guid()` y no con `z.uuid()`: en Zod 4, `uuid` rechazaría ids escritos a mano en los datos de ejemplo.
+
+10. **La pantalla abre con el primer cliente (por orden alfabético) que tenga logos** y con su logo principal ya elegido, cargados en el servidor para que el mockup salga dibujado desde el principio. Cero pantalla en blanco.
+
+11. **Queda pendiente para F2.3:** la tabla `prendas` no tiene columna de tipo (polo, camiseta…). Para usar el mockup en el wizard habrá que decidir cómo se relaciona cada prenda del catálogo con su tipo. Además, rasterizar para el PDF probablemente pedirá la URL firmada directa y no la redirección.
+
+**Sin migración SQL. Sin dependencias nuevas.**
+
+**Validación visual por Claude Code** (renderizando el componente a HTML estático y sirviéndolo por HTTP temporal): 6 casos verificados —pecho 9×4 centrado, espalda 25×30 con banda de "vista trasera", espalda 40×50 con borde rojo y aviso, chaleco con manga ("Ubicación no disponible"), prenda oscura sin logo, sudadera con manga. Bug propio detectado y corregido durante el proceso: texto "Sin logo cargado" se salía de la caja en logos pequeños (9×4 a 400 px) → limitado su tamaño al ancho de la caja.
+
+**Validación real por Alan en `/mockup-test`:** los 6 casos del checklist pasaron. Pantalla arranca con Doyle Náutica + logo Kirkland + Sudadera oscura + Pecho 9×4 cm, mockup renderizado a 5,88 px/cm (SVG 329×400 px, área imprimible 30×20 cm, logo 53×24 px, sin warnings). Sonia no puede acceder a `/mockup-test`.
+
+**Estado de tests:** 286/286 tests passing (278 previos + 8 nuevos).
+
+---
+
+## Notas críticas pendientes para F2.3
+
+Antes de arrancar F2.3 hay decisiones pendientes derivadas de la decisión 11 del Prompt F2.2:
+
+### 28. Tabla `prendas` sin columna `tipo`
+
+La tabla `prendas` del catálogo (creada en Prompt 3) no tiene columna que identifique si una prenda es polo, camiseta, sudadera, chaleco, delantal, toalla u otro. El mockup lo necesita para elegir las dimensiones y áreas imprimibles correctas.
+
+**Opciones a decidir en F2.3:**
+
+- **Opción A** — Añadir columna `tipo_mockup` a `prendas` con enum `polo | camiseta | sudadera | chaleco | delantal | toalla | otro`. Migración SQL + rellenar manualmente para las 13 prendas top del catálogo.
+
+- **Opción B** — Selector "Tipo de prenda para el mockup" en el wizard (paso 4), que Sonia elige manualmente cada vez. Sin migración pero repetitivo.
+
+- **Opción C** — Detección automática del tipo por palabras clave en el nombre (`polo` → `polo`, `camiseta` → `camiseta`) + fallback a `otro`. Sin migración pero frágil.
+
+**Recomendación:** Opción A. Es una migración pequeña y el dato es estable (una prenda no cambia de tipo).
+
+### 29. Rasterización SVG → PNG para el PDF
+
+`@react-pdf/renderer` no acepta SVG directamente en su `<Image>`. Para incluir el mockup en el PDF hay que rasterizarlo (convertir a PNG).
+
+**Opciones:**
+
+- **Opción X** — Rasterizar en el servidor con `sharp` o `resvg-js` cuando se genera el PDF. Añade dependencia.
+
+- **Opción Y** — Redibujar el mockup con primitivos de `@react-pdf/renderer` (View, Text, Image) en paralelo al SVG del navegador. Sin dependencia pero código duplicado.
+
+**Recomendación:** Y. Es una vista simplificada del mockup para el PDF; no necesita ser pixel-perfect igual al SVG del navegador.
+
+### 30. Miniatura del mockup en el hub del presupuesto
+
+En la tabla de líneas del hub del presupuesto, cada línea con mockup podrá mostrar una miniatura. ¿Se guarda pre-renderizada o se calcula al vuelo? Decisión pendiente en F2.3.
+
+---
+
+*Última actualización del documento: septiembre 2026 tras cierre de F2.2. **FASE 2 al 50%** (F2.1 + F2.2 completados). Siguiente: F2.3 integración wizard + PDF.*
