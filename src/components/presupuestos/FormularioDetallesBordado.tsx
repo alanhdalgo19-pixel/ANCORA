@@ -5,6 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  useCambioMockup,
+  type AvisoCambioMockup,
+} from "@/hooks/use-cambio-mockup";
 import { formatEuros } from "@/lib/format";
 import type { CodigoPicaje, Posicion, UnidadMedidaBordado } from "@/types/database";
 import type { DetallesTecnica, ParametrosWizard } from "@/types/presupuestos";
@@ -68,6 +72,8 @@ interface Props {
   calculando: boolean;
   onVolver: () => void;
   onContinuar: (detalles: DetallesTecnica) => void;
+  /** F2.3 — medidas en vivo para el mockup de la columna derecha. */
+  onCambioMockup?: AvisoCambioMockup;
 }
 
 export function FormularioDetallesBordado({
@@ -78,6 +84,7 @@ export function FormularioDetallesBordado({
   calculando,
   onVolver,
   onContinuar,
+  onCambioMockup,
 }: Props) {
   const {
     register,
@@ -107,6 +114,17 @@ export function FormularioDetallesBordado({
   const tarifa = watch("tarifa");
   const trabajoNuevo = watch("trabajo_nuevo");
   const tipoPicaje = watch("tipo_picaje");
+
+  useCambioMockup(
+    [
+      {
+        ubicacion: posicion,
+        ancho_cm: watch("ancho_logo_cm"),
+        alto_cm: watch("alto_logo_cm"),
+      },
+    ],
+    onCambioMockup,
+  );
 
   const unidad = ETIQUETA_UNIDAD[parametros.bordado.unidad_medida];
 
@@ -188,7 +206,7 @@ export function FormularioDetallesBordado({
         label="Puntadas estimadas"
         error={errorPuntadas}
         className="max-w-xs"
-        ayuda="Las medidas del logo son informativas: el precio del bordado sale de las puntadas. Si no las sabes, consúltalo con Espe antes de emitir."
+        ayuda="Las medidas del logo no cambian el precio (sale de las puntadas), pero se usan para el mockup. Si no sabes las puntadas, consúltalo con Espe antes de emitir."
       >
         <Input
           id="puntadas"

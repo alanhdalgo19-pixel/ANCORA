@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NOMBRE_TECNICA } from "@/lib/presupuestos/descripciones";
 import { cn } from "@/lib/utils";
+import type { LogoMockupSnapshot } from "@/lib/mockup/snapshot";
 import type { CodigoTecnica, ColorGrupo, TipoCliente } from "@/types/database";
 import type {
   DatosLineaWizard,
   DetallesTecnica,
+  LogoWizard,
   ParametrosWizard,
   PreviewLinea as DatosPreviewLinea,
 } from "@/types/presupuestos";
@@ -21,7 +23,9 @@ import { FormularioDetallesDTF } from "./FormularioDetallesDTF";
 import { FormularioDetallesImpresionDirecta } from "./FormularioDetallesImpresionDirecta";
 import { FormularioDetallesSerigrafia } from "./FormularioDetallesSerigrafia";
 import { FormularioDetallesSublimacion } from "./FormularioDetallesSublimacion";
+import { MockupPreview } from "./MockupPreview";
 import { PreviewLinea } from "./PreviewLinea";
+import { SelectorLogo } from "./SelectorLogo";
 import { SelectorPrenda, type PrendaOpcion } from "./SelectorPrenda";
 import { SelectorTecnica } from "./SelectorTecnica";
 import { WizardStepper } from "./WizardStepper";
@@ -42,9 +46,25 @@ interface LineaWizardProps {
   descuentoBordadoPct: number;
   prendas: PrendaOpcion[];
   parametros: ParametrosWizard;
+  /** F2.3 — biblioteca de logos del cliente del presupuesto. */
+  logosCliente: LogoWizard[];
   /** Presente cuando se está editando una línea existente. */
   lineaId?: string;
   valorInicial?: DatosLineaWizard;
+}
+
+/**
+ * Logo con el que arranca el paso 4: el que se guardó con la línea si sigue en
+ * la biblioteca; si la línea no tenía (o es nueva), el principal del cliente.
+ * `null` guardado explícitamente ("Sin logo") se respeta.
+ */
+function logoInicial(
+  logos: LogoWizard[],
+  guardado: string | null | undefined,
+): string | null {
+  if (guardado === null) return null;
+  if (guardado && logos.some((logo) => logo.id === guardado)) return guardado;
+  return logos.find((logo) => logo.es_principal)?.id ?? null;
 }
 
 export function LineaWizard({
@@ -55,6 +75,7 @@ export function LineaWizard({
   descuentoBordadoPct,
   prendas,
   parametros,
+  logosCliente,
   lineaId,
   valorInicial,
 }: LineaWizardProps) {
@@ -84,8 +105,25 @@ export function LineaWizard({
   const [errorPaso3, setErrorPaso3] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
+  // F2.3 — logo y mockup del paso 4.
+  const [logos, setLogos] = useState(logosCliente);
+  const [logoId, setLogoId] = useState<string | null>(() =>
+    logoInicial(logosCliente, valorInicial?.logo_id),
+  );
+  const [logosMockup, setLogosMockup] = useState<LogoMockupSnapshot[]>([]);
+
   const cantidadNumero = Number.parseInt(cantidad, 10);
   const cantidadValida = Number.isInteger(cantidadNumero) && cantidadNumero > 0;
+
+  // Sin prenda del catálogo (el cliente la aporta) se pinta una prenda
+  // genérica en blanco: no se sabe ni el tipo ni el color.
+  const prendaElegida =
+    conPrenda && prendaId
+      ? (prendas.find((prenda) => prenda.id === prendaId) ?? null)
+      : null;
+  const tipoPrendaMockup = prendaElegida?.tipo_mockup ?? "otro";
+  const colorPrendaMockup: ColorGrupo = prendaElegida ? colorGrupo : "blanco";
+  const logoElegido = logos.find((logo) => logo.id === logoId) ?? null;
 
   function construirDatos(detallesFinales: DetallesTecnica): DatosLineaWizard {
     return {
@@ -94,6 +132,7 @@ export function LineaWizard({
       color: conPrenda ? color.trim() || null : null,
       color_grupo: conPrenda ? colorGrupo : null,
       detalles: detallesFinales,
+      logo_id: logoId,
     };
   }
 
@@ -145,10 +184,12 @@ export function LineaWizard({
       setPaso(3);
     },
     onContinuar: calcular,
+    onCambioMockup: setLogosMockup,
   };
 
   return (
-    <div className="mx-auto max-w-3xl p-8">
+    // El paso 4 se ensancha para caber formulario + mockup en dos columnas.
+    <div className={cn("mx-auto p-8", paso === 4 ? "max-w-6xl" : "max-w-3xl")}>
       <div className="mb-6">
         <Link
           href={`/presupuestos/${presupuestoId}`}
@@ -314,53 +355,82 @@ export function LineaWizard({
             Detalles de {NOMBRE_TECNICA[tecnica].toLowerCase()}
           </h2>
 
-          {tecnica === "DTF" && (
-            <FormularioDetallesDTF
-              valorInicial={
-                detalles?.tecnica === "DTF" ? detalles : null
-              }
-              // El cálculo en vivo de la composición necesita el presupuesto
-              // (para el tipo de cliente) y la cantidad de prendas del paso 3.
-              presupuestoId={presupuestoId}
-              cantidad={cantidadNumero}
-              {...propsFormulario}
-            />
-          )}
-          {tecnica === "BORDADO" && (
-            <FormularioDetallesBordado
-              valorInicial={detalles?.tecnica === "BORDADO" ? detalles : null}
-              descuentoBordadoPct={
-                tipoCliente === "habitual" ? descuentoBordadoPct : 0
-              }
-              {...propsFormulario}
-            />
-          )}
-          {tecnica === "SERIGRAFIA" && (
-            <FormularioDetallesSerigrafia
-              valorInicial={detalles?.tecnica === "SERIGRAFIA" ? detalles : null}
-              {...propsFormulario}
-            />
-          )}
-          {tecnica === "IMPRESION_DIRECTA" && (
-            <FormularioDetallesImpresionDirecta
-              valorInicial={
-                detalles?.tecnica === "IMPRESION_DIRECTA" ? detalles : null
-              }
-              {...propsFormulario}
-            />
-          )}
-          {tecnica === "SUBLIMACION" && (
-            <FormularioDetallesSublimacion
-              valorInicial={detalles?.tecnica === "SUBLIMACION" ? detalles : null}
-              errorMotor={errorMotor}
-              calculando={ocupado}
-              onVolver={() => {
-                setErrorMotor(null);
-                setPaso(3);
-              }}
-              onContinuar={calcular}
-            />
-          )}
+          {/* Dos columnas desde 1024 px: formulario a la izquierda y mockup a
+              la derecha (fijo al hacer scroll). Por debajo, el mockup baja
+              detrás del formulario. */}
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 space-y-6">
+              <SelectorLogo
+                presupuestoId={presupuestoId}
+                logos={logos}
+                logoId={logoId}
+                disabled={ocupado}
+                onSeleccionar={setLogoId}
+                onSubido={(logo) => {
+                  setLogos((actuales) => [...actuales, logo]);
+                  setLogoId(logo.id);
+                }}
+              />
+
+              {tecnica === "DTF" && (
+                <FormularioDetallesDTF
+                  valorInicial={
+                    detalles?.tecnica === "DTF" ? detalles : null
+                  }
+                  // El cálculo en vivo de la composición necesita el presupuesto
+                  // (para el tipo de cliente) y la cantidad de prendas del paso 3.
+                  presupuestoId={presupuestoId}
+                  cantidad={cantidadNumero}
+                  {...propsFormulario}
+                />
+              )}
+              {tecnica === "BORDADO" && (
+                <FormularioDetallesBordado
+                  valorInicial={detalles?.tecnica === "BORDADO" ? detalles : null}
+                  descuentoBordadoPct={
+                    tipoCliente === "habitual" ? descuentoBordadoPct : 0
+                  }
+                  {...propsFormulario}
+                />
+              )}
+              {tecnica === "SERIGRAFIA" && (
+                <FormularioDetallesSerigrafia
+                  valorInicial={detalles?.tecnica === "SERIGRAFIA" ? detalles : null}
+                  {...propsFormulario}
+                />
+              )}
+              {tecnica === "IMPRESION_DIRECTA" && (
+                <FormularioDetallesImpresionDirecta
+                  valorInicial={
+                    detalles?.tecnica === "IMPRESION_DIRECTA" ? detalles : null
+                  }
+                  {...propsFormulario}
+                />
+              )}
+              {tecnica === "SUBLIMACION" && (
+                <FormularioDetallesSublimacion
+                  valorInicial={detalles?.tecnica === "SUBLIMACION" ? detalles : null}
+                  errorMotor={errorMotor}
+                  calculando={ocupado}
+                  onVolver={() => {
+                    setErrorMotor(null);
+                    setPaso(3);
+                  }}
+                  onContinuar={calcular}
+                  onCambioMockup={setLogosMockup}
+                />
+              )}
+            </div>
+
+            <div className="lg:sticky lg:top-6 lg:self-start">
+              <MockupPreview
+                tipoPrenda={tipoPrendaMockup}
+                colorPrenda={colorPrendaMockup}
+                logo={logoElegido}
+                logos={logosMockup}
+              />
+            </div>
+          </div>
         </section>
       )}
 

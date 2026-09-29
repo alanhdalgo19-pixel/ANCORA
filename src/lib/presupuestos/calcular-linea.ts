@@ -24,6 +24,11 @@ import {
   type LogoInput,
   type TramoMargen,
 } from "@/lib/calculos";
+import type { FormatoLogo } from "@/lib/logos/validar";
+import {
+  construirMockupSnapshot,
+  type LogoElegido,
+} from "@/lib/mockup/snapshot";
 import type { createClient } from "@/lib/supabase/server";
 import type {
   Cliente,
@@ -600,6 +605,8 @@ async function calcularTecnica(
 interface PrendaCalculada {
   fila: FilaLineaCalculada;
   sin_precio: boolean;
+  /** `prendas.tipo_mockup` (F2.3); null si la prenda no está clasificada. */
+  tipo_mockup: string | null;
 }
 
 async function calcularLineaPrenda(
@@ -612,7 +619,7 @@ async function calcularLineaPrenda(
 ): Promise<PrendaCalculada> {
   const { data: prenda } = await supabase
     .from("prendas")
-    .select("id, nombre, codigo_interno")
+    .select("id, nombre, codigo_interno, tipo_mockup")
     .eq("id", prendaId)
     .single();
 
@@ -665,6 +672,7 @@ async function calcularLineaPrenda(
 
   return {
     sin_precio: precioUnitario === 0,
+    tipo_mockup: (prenda.tipo_mockup as string | null | undefined) ?? null,
     fila: {
       tipo_linea: "prenda",
       prenda_id: prendaId,
@@ -690,6 +698,40 @@ async function calcularLineaPrenda(
 }
 
 // ---------------------------------------------------------------------------
+// Logo del mockup (F2.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Datos del logo elegido en el paso 4. Se leen con el cliente del usuario, así
+ * que RLS decide si puede verlo. Además se exige que el logo sea del mismo
+ * cliente que el presupuesto: una Server Action se puede llamar con cualquier
+ * id y no queremos el logo de otro cliente en este PDF.
+ */
+async function cargarLogoElegido(
+  supabase: SupabaseServerClient,
+  logoId: string,
+  clienteId: string | undefined,
+): Promise<LogoElegido> {
+  const { data } = await supabase
+    .from("logos_clientes")
+    .select("id, nombre, formato, cliente_id")
+    .eq("id", logoId)
+    .maybeSingle();
+
+  if (!data || (clienteId && data.cliente_id !== clienteId)) {
+    throw new ErrorCalculo(
+      "El logo elegido ya no está en la biblioteca del cliente. Elige otro o sube uno nuevo.",
+    );
+  }
+
+  return {
+    id: data.id as string,
+    nombre: data.nombre as string,
+    formato: data.formato as FormatoLogo,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // API pública
 // ---------------------------------------------------------------------------
 
@@ -704,7 +746,11 @@ async function calcularLineaPrenda(
 export async function calcularLinea(
   supabase: SupabaseServerClient,
   datos: DatosLineaWizard,
-  cliente: Pick<Cliente, "tipo_cliente" | "descuento_bordado_pct">,
+  // `id` es opcional para no obligar a los dobles de los tests del motor; las
+  // Server Actions lo pasan siempre y con él se valida el dueño del logo.
+  cliente: Pick<Cliente, "tipo_cliente" | "descuento_bordado_pct"> & {
+    id?: string;
+  },
 ): Promise<LineaCalculada> {
   if (!Number.isInteger(datos.cantidad) || datos.cantidad <= 0) {
     throw new ErrorCalculo("La cantidad debe ser un número entero mayor que cero.");
@@ -748,6 +794,22 @@ export async function calcularLinea(
   const { resultado, tecnicaId, picajeId } = calculo;
   const detalles = datos.detalles;
 
+  // F2.3 — bloque `mockup`: superset del snapshot, igual que `wizard`. No toca
+  // ningún importe; solo permite redibujar el mockup en el PDF y restaurarlo
+  // al reeditar la línea.
+  const logoElegido = datos.logo_id
+    ? await cargarLogoElegido(supabase, datos.logo_id, cliente.id)
+    : null;
+  const mockup = construirMockupSnapshot({
+    detalles,
+    tipo_mockup: prendaCalculada?.tipo_mockup ?? null,
+    color_grupo: datos.prenda_id ? datos.color_grupo : null,
+    logo: logoElegido,
+  });
+  const detalleCalculo = mockup
+    ? { ...(resultado.detalle_calculo as Record<string, unknown>), mockup }
+    : resultado.detalle_calculo;
+
   // En una composición DTF no hay una posición ni unas medidas únicas: las
   // columnas guardan las del primer logo (útiles para filtrar e informar) y el
   // detalle completo de todos vive en el snapshot.
@@ -788,7 +850,7 @@ export async function calcularLinea(
     margen_aplicado_pct: resultado.margen_aplicado_pct,
     precio_unitario: resultado.precio_unitario,
     importe_linea: resultado.importe_linea,
-    detalle_calculo: resultado.detalle_calculo,
+    detalle_calculo: detalleCalculo,
   };
 
   // Los extras van en líneas propias (CLAUDE.md 7.3 PASO 6 y 7.4 PASO 5).

@@ -5,9 +5,18 @@
 // lógica se testea sin renderizar y F2.3 podrá reutilizar exactamente las
 // mismas coordenadas al rasterizar el mockup para el PDF.
 //
-// Todas las coordenadas que devuelve están en píxeles del SVG, con origen en la
-// esquina superior izquierda de la prenda. Las medidas en cm se conservan al
-// lado para las etiquetas y para auditar.
+// Todas las coordenadas que devuelve están en la unidad de dibujo pedida, con
+// origen en la esquina superior izquierda de la prenda. Las medidas en cm se
+// conservan al lado para las etiquetas y para auditar.
+//
+// F2.3 — unidad de dibujo parametrizada:
+//   · "px" (por defecto): píxeles del SVG del navegador. La prenda ocupa
+//     `alto_pixels` de ALTO (400 por defecto), como en F2.2.
+//   · "pt": puntos tipográficos del PDF (@react-pdf/renderer). La prenda ocupa
+//     `ancho_pt` de ANCHO (180 por defecto): en el PDF el mockup va en una
+//     columna de ancho fijo y lo que varía entre prendas es el alto.
+// La matemática es idéntica; solo cambia la escala base. Los campos siguen
+// llamándose `*_px` por compatibilidad con F2.2: en modo "pt" contienen puntos.
 
 import type { ColorGrupo, Ubicacion } from "@/lib/calculos/types";
 import {
@@ -19,6 +28,11 @@ import {
 } from "./dimensiones-prendas";
 
 export const ALTO_PIXELS_POR_DEFECTO = 400;
+
+/** Ancho del bloque de mockup en el PDF: ~6,35 cm sobre el A4. */
+export const ANCHO_PT_POR_DEFECTO = 180;
+
+export type UnidadMockup = "px" | "pt";
 
 /** Margen entre el borde superior del área imprimible y el logo. */
 export const MARGEN_SUPERIOR_LOGO_CM = 2;
@@ -52,7 +66,12 @@ export interface EntradaLayoutMockup {
   logo_ancho_cm: number;
   logo_alto_cm: number;
   ubicacion: Ubicacion;
+  /** Unidad de dibujo. Por defecto "px" (navegador). */
+  unidad?: UnidadMockup;
+  /** Solo en "px": alto de la prenda en píxeles. */
   alto_pixels?: number;
+  /** Solo en "pt": ancho de la prenda en puntos del PDF. */
+  ancho_pt?: number;
 }
 
 export interface AreaLayout {
@@ -82,6 +101,8 @@ export interface LogoLayout {
 }
 
 export interface LayoutMockup {
+  /** Unidad en la que están expresados todos los campos `*_px`. */
+  unidad: UnidadMockup;
   svg_ancho_px: number;
   svg_alto_px: number;
   escala_px_por_cm: number;
@@ -150,12 +171,22 @@ export function calcularLayoutMockup(
   }
   const prenda = obtenerDimensionesPrenda(entrada.tipo_prenda);
 
-  const altoPixels = esMedidaValida(entrada.alto_pixels ?? NaN)
-    ? (entrada.alto_pixels as number)
-    : ALTO_PIXELS_POR_DEFECTO;
+  const unidad: UnidadMockup = entrada.unidad ?? "px";
 
-  // 1. Escala: la prenda ocupa siempre `alto_pixels` de alto.
-  const escala = altoPixels / prenda.alto_cm;
+  // 1. Escala. En pantalla la prenda ocupa siempre `alto_pixels` de alto; en
+  //    el PDF, `ancho_pt` de ancho.
+  let escala: number;
+  if (unidad === "pt") {
+    const anchoPt = esMedidaValida(entrada.ancho_pt ?? NaN)
+      ? (entrada.ancho_pt as number)
+      : ANCHO_PT_POR_DEFECTO;
+    escala = anchoPt / prenda.ancho_cm;
+  } else {
+    const altoPixels = esMedidaValida(entrada.alto_pixels ?? NaN)
+      ? (entrada.alto_pixels as number)
+      : ALTO_PIXELS_POR_DEFECTO;
+    escala = altoPixels / prenda.alto_cm;
+  }
   const px = (cm: number) => cm * escala;
 
   const color = entrada.color_prenda ?? "blanco";
@@ -228,6 +259,7 @@ export function calcularLayoutMockup(
   }
 
   return {
+    unidad,
     svg_ancho_px: px(prenda.ancho_cm),
     svg_alto_px: px(prenda.alto_cm),
     escala_px_por_cm: escala,

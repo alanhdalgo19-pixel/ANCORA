@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import type { Tejido } from "@/types/database";
+import { esTipoPrenda } from "@/lib/mockup/dimensiones-prendas";
+import { createClient, getUserRole } from "@/lib/supabase/server";
+import type { Tejido, TipoMockup } from "@/types/database";
 
 export interface PrendaInput {
   codigo_interno: string;
@@ -88,6 +89,51 @@ export async function reactivarPrenda(id: string) {
 interface ActionResultSimple {
   error?: string;
   success?: boolean;
+}
+
+/**
+ * F2.3 — guarda en bloque el tipo de mockup de varias prendas (columna
+ * "Tipo mockup" del listado). Mismo patrón que `actualizarPreciosPrenda`:
+ * un update por fila, todos en paralelo.
+ *
+ * `/admin/prendas` ya está limitado a admin por su layout y RLS restringe la
+ * escritura en `prendas`; aun así se comprueba el rol porque una Server Action
+ * es un endpoint que se puede invocar desde fuera de la pantalla.
+ */
+export async function actualizarTiposMockup(
+  cambios: { id: string; tipo_mockup: TipoMockup | null }[],
+): Promise<ActionResultSimple> {
+  const rol = await getUserRole();
+  if (rol !== "admin") {
+    return { error: "Solo un administrador puede cambiar el tipo de mockup." };
+  }
+
+  if (
+    cambios.some(
+      (cambio) =>
+        cambio.tipo_mockup !== null && !esTipoPrenda(cambio.tipo_mockup),
+    )
+  ) {
+    return { error: "Hay un tipo de mockup no válido." };
+  }
+  if (!cambios.length) return { success: true };
+
+  const supabase = createClient();
+  const resultados = await Promise.all(
+    cambios.map((cambio) =>
+      supabase
+        .from("prendas")
+        .update({ tipo_mockup: cambio.tipo_mockup })
+        .eq("id", cambio.id),
+    ),
+  );
+
+  if (resultados.some((r) => r.error)) {
+    return { error: "No se pudo guardar algún tipo. Inténtalo de nuevo." };
+  }
+
+  revalidatePath("/admin/prendas");
+  return { success: true };
 }
 
 export async function actualizarPreciosPrenda(

@@ -364,11 +364,17 @@ async function cargarClienteDePresupuesto(
 ) {
   const { data } = await supabase
     .from("clientes")
-    .select("tipo_cliente, descuento_bordado_pct")
+    .select("id, tipo_cliente, descuento_bordado_pct")
     .eq("id", clienteId)
     .single();
+  // `id` viaja al puente para comprobar que el logo del mockup (F2.3) es de
+  // este cliente.
   return data as
-    | { tipo_cliente: "esporadico" | "habitual"; descuento_bordado_pct: number }
+    | {
+        id: string;
+        tipo_cliente: "esporadico" | "habitual";
+        descuento_bordado_pct: number;
+      }
     | null;
 }
 

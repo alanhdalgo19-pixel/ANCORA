@@ -8,6 +8,7 @@ import type {
   CodigoPicaje,
   CodigoTecnica,
   ColorGrupo,
+  FormatoLogo,
   Posicion,
   TipoLinea,
   Ubicacion,
@@ -86,6 +87,9 @@ export type DetallesTecnica =
       tipo_picaje: CodigoPicaje | null;
       precio_picaje_personalizado: number | null;
     }
+  // En serigrafía, impresión directa y sublimación el precio no depende del
+  // tamaño del logo: `ancho_logo_cm` / `alto_logo_cm` son opcionales y solo
+  // alimentan el mockup (F2.3). El motor de cálculo no los lee.
   | {
       tecnica: "SERIGRAFIA";
       ubicacion: Ubicacion;
@@ -95,6 +99,8 @@ export type DetallesTecnica =
       incluir_vectorizacion: boolean;
       incluir_pantone: boolean;
       cantidad_pantones: number | null;
+      ancho_logo_cm: number | null;
+      alto_logo_cm: number | null;
     }
   | {
       tecnica: "IMPRESION_DIRECTA";
@@ -102,10 +108,14 @@ export type DetallesTecnica =
       num_colores: 1 | 2;
       prenda_oscura: boolean;
       incluir_vectorizacion: boolean;
+      ancho_logo_cm: number | null;
+      alto_logo_cm: number | null;
     }
   | {
       tecnica: "SUBLIMACION";
       posicion: Posicion;
+      ancho_logo_cm: number | null;
+      alto_logo_cm: number | null;
     };
 
 /** Todo lo que recoge el wizard para construir una línea (pasos 2 a 4). */
@@ -115,6 +125,27 @@ export interface DatosLineaWizard {
   color: string | null;
   color_grupo: ColorGrupo | null;
   detalles: DetallesTecnica;
+  /**
+   * F2.3 — logo de la biblioteca del cliente que se pinta en el mockup.
+   * Opcional: una línea sin logo se guarda igual (el mockup pinta la caja
+   * "Sin logo cargado"), y las líneas anteriores a F2.3 no lo tienen.
+   */
+  logo_id?: string | null;
+}
+
+/**
+ * Logo de la biblioteca del cliente tal como lo necesita el paso 4 del wizard
+ * (F2.3): el selector lo lista y el mockup lo pinta por `url`.
+ */
+export interface LogoWizard {
+  id: string;
+  nombre: string;
+  formato: FormatoLogo;
+  es_principal: boolean;
+  /** `/api/logos/{id}`: redirige a una URL firmada del bucket privado. */
+  url: string;
+  /** Un PDF no se puede pintar dentro de un `<image>` SVG. */
+  previsualizable: boolean;
 }
 
 /** Una fila del preview del paso 5 (y del resumen tras guardar). */

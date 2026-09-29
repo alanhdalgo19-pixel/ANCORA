@@ -3,16 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createClient, getUserRole } from "@/lib/supabase/server";
 import { obtenerLogo } from "@/lib/logos/consultas";
-import {
-  eliminarArchivoLogo,
-  rutaLogo,
-  subirArchivoLogo,
-} from "@/lib/logos/subir";
-import {
-  dimensionesDeImagen,
-  validarArchivoLogo,
-  validarFirmaArchivo,
-} from "@/lib/logos/validar";
+import { puertosSupabase } from "@/lib/logos/puertos";
+import { registrarLogo } from "@/lib/logos/registrar";
+import { eliminarArchivoLogo } from "@/lib/logos/subir";
 import type { Rol } from "@/types/database";
 
 export type ResultadoAccion = { ok: true } | { ok: false; error: string };
@@ -112,82 +105,24 @@ export async function subirLogo(datos: FormData): Promise<ResultadoSubida> {
     return { ok: false, error: "No se ha encontrado el cliente." };
   }
 
-  // 3. Primera capa de validación: tamaño y tipo MIME declarado.
-  const validacion = validarArchivoLogo(archivo);
-  if (!validacion.valido || !validacion.formato) {
-    return { ok: false, error: validacion.error ?? ERROR_GENERICO };
-  }
-  const formato = validacion.formato;
+  // 3-8. Validación (tamaño, MIME y firma), subida al bucket y fila. Si es el
+  // primer logo del cliente se marca principal solo: una biblioteca con un
+  // único logo y ninguno señalado no le serviría al wizard, que sugiere el
+  // principal por defecto. Núcleo compartido con la subida puntual (F2.3).
+  const resultado = await registrarLogo(puertosSupabase(supabase), {
+    modo: "biblioteca",
+    clienteId,
+    usuarioId: user.id,
+    archivo,
+    nombre: limpiarTexto(datos.get("nombre"), LARGO_MAX_NOMBRE),
+    notas: limpiarTexto(datos.get("notas"), LARGO_MAX_NOTAS) || null,
+    esPrincipalSolicitado: datos.get("es_principal") === "true",
+  });
 
-  // 4. Segunda capa: la firma del contenido real. El navegador puede mentir
-  //    con el MIME (lo deduce de la extensión), los bytes no.
-  const bytes = new Uint8Array(await archivo.arrayBuffer());
-  const firma = validarFirmaArchivo(bytes, formato);
-  if (!firma.valido) {
-    return { ok: false, error: firma.error ?? ERROR_GENERICO };
-  }
-
-  const nombre =
-    limpiarTexto(datos.get("nombre"), LARGO_MAX_NOMBRE) || archivo.name;
-  const notas = limpiarTexto(datos.get("notas"), LARGO_MAX_NOTAS) || null;
-
-  // Si es el primer logo del cliente se marca principal solo: una biblioteca
-  // con un único logo y ninguno señalado no le sirve de nada a F2.3, que
-  // sugerirá el principal por defecto en el wizard.
-  const { count } = await supabase
-    .from("logos_clientes")
-    .select("id", { count: "exact", head: true })
-    .eq("cliente_id", clienteId);
-
-  const esPrincipal = datos.get("es_principal") === "true" || (count ?? 0) === 0;
-
-  // 5-6. Ruta única y subida al bucket.
-  const ruta = rutaLogo(clienteId, formato);
-  const subida = await subirArchivoLogo(ruta, bytes, formato);
-  if (!subida.ok) {
-    return {
-      ok: false,
-      error: "No se ha podido guardar el archivo. Revisa tu conexión.",
-    };
-  }
-
-  // 7. Solo puede haber un principal por cliente.
-  if (esPrincipal) {
-    const desmarcado = await desmarcarPrincipal(supabase, clienteId);
-    if (!desmarcado) {
-      await eliminarArchivoLogo(ruta);
-      return { ok: false, error: ERROR_GENERICO };
-    }
-  }
-
-  // 8. Fila con todos los metadatos.
-  const dimensiones = dimensionesDeImagen(bytes, formato);
-  const { data: insertado, error } = await supabase
-    .from("logos_clientes")
-    .insert({
-      cliente_id: clienteId,
-      nombre,
-      storage_path: ruta,
-      formato,
-      tamano_bytes: archivo.size,
-      ancho_px: dimensiones?.ancho ?? null,
-      alto_px: dimensiones?.alto ?? null,
-      es_principal: esPrincipal,
-      subido_por: user.id,
-      notas,
-    })
-    .select("id")
-    .single();
-
-  if (error || !insertado) {
-    // El archivo ya está en el bucket pero no hay fila que lo referencie:
-    // se retira para no dejar huérfanos que nadie pueda ver ni borrar.
-    await eliminarArchivoLogo(ruta);
-    return { ok: false, error: "No se ha podido guardar el logo." };
-  }
+  if (!resultado.ok) return resultado;
 
   revalidarCliente(clienteId);
-  return { ok: true, logo_id: insertado.id as string };
+  return { ok: true, logo_id: resultado.logo_id };
 }
 
 // ---------------------------------------------------------------------------

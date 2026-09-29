@@ -4,9 +4,12 @@
 
 import type { createClient } from "@/lib/supabase/server";
 import type { PrendaOpcion } from "@/components/presupuestos/SelectorPrenda";
+import { listarLogosDeCliente } from "@/lib/logos/consultas";
+import { leerMockupSnapshot, resolverTipoPrenda } from "@/lib/mockup/snapshot";
 import type {
   CodigoPicaje,
   ColorGrupo,
+  LogoCliente,
   Posicion,
   UnidadMedidaBordado,
 } from "@/types/database";
@@ -14,6 +17,7 @@ import type {
   DatosLineaWizard,
   DetallesTecnica,
   LogoDTFWizard,
+  LogoWizard,
   ParametrosWizard,
 } from "@/types/presupuestos";
 import type { TarifaBordado } from "@/lib/calculos";
@@ -32,7 +36,7 @@ export async function cargarPrendas(
   const { data } = await supabase
     .from("prendas")
     .select(
-      "id, codigo_interno, nombre, proveedor_id, disponible_oscuro, proveedores(nombre)",
+      "id, codigo_interno, nombre, proveedor_id, disponible_oscuro, tipo_mockup, proveedores(nombre)",
     )
     .eq("activo", true)
     .order("nombre");
@@ -52,8 +56,34 @@ export async function cargarPrendas(
       proveedor_nombre:
         (proveedor as { nombre?: string } | null)?.nombre ?? "Sin proveedor",
       disponible_oscuro: fila.disponible_oscuro === true,
+      tipo_mockup: resolverTipoPrenda(fila.tipo_mockup as string | null),
     };
   });
+}
+
+/**
+ * Biblioteca de logos del cliente para el selector del paso 4 (F2.3). El
+ * principal va primero (orden de `listarLogosDeCliente`).
+ */
+export async function cargarLogosWizard(
+  supabase: SupabaseServerClient,
+  clienteId: string,
+): Promise<LogoWizard[]> {
+  const logos = await listarLogosDeCliente(supabase, clienteId);
+  return logos.map(aLogoWizard);
+}
+
+export function aLogoWizard(
+  logo: Pick<LogoCliente, "id" | "nombre" | "formato" | "es_principal">,
+): LogoWizard {
+  return {
+    id: logo.id,
+    nombre: logo.nombre,
+    formato: logo.formato,
+    es_principal: logo.es_principal,
+    url: `/api/logos/${logo.id}`,
+    previsualizable: logo.formato !== "pdf",
+  };
 }
 
 /** Importes y tarifas que el paso 4 muestra en pantalla. */
@@ -267,6 +297,10 @@ export function reconstruirDatosLinea(linea: {
         incluir_vectorizacion: inputs.incluir_vectorizacion === true,
         incluir_pantone: inputs.incluir_pantone === true,
         cantidad_pantones: leerNumero(inputs, "cantidad_pantones"),
+        // Medidas solo para el mockup (F2.3): el motor no las guarda en
+        // `inputs`, pero el puente sí las deja en las columnas de la línea.
+        ancho_logo_cm: linea.ancho_logo_cm,
+        alto_logo_cm: linea.alto_logo_cm,
       };
       break;
 
@@ -277,6 +311,8 @@ export function reconstruirDatosLinea(linea: {
         num_colores: leerNumero(inputs, "num_colores") === 2 ? 2 : 1,
         prenda_oscura: inputs.prenda_oscura === true,
         incluir_vectorizacion: inputs.incluir_vectorizacion === true,
+        ancho_logo_cm: linea.ancho_logo_cm,
+        alto_logo_cm: linea.alto_logo_cm,
       };
       break;
 
@@ -284,6 +320,8 @@ export function reconstruirDatosLinea(linea: {
       detalles = {
         tecnica: "SUBLIMACION",
         posicion: leerPosicion(inputs, "posicion"),
+        ancho_logo_cm: linea.ancho_logo_cm,
+        alto_logo_cm: linea.alto_logo_cm,
       };
       break;
 
@@ -297,5 +335,10 @@ export function reconstruirDatosLinea(linea: {
     color: linea.color,
     color_grupo: linea.color_grupo,
     detalles,
+    // F2.3 — el logo elegido la primera vez. Las medidas no hace falta leerlas
+    // del bloque `mockup`: salen de los detalles, que ya están restaurados.
+    // `undefined` (línea sin bloque `mockup`) deja que el wizard sugiera el
+    // principal; `null` significa que se guardó "Sin logo" a propósito.
+    logo_id: leerMockupSnapshot(snapshot)?.logo_id,
   };
 }

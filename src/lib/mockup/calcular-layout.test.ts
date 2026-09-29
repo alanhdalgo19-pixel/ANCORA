@@ -165,4 +165,49 @@ describe("calcularLayoutMockup", () => {
     expect(area.alto_cm).toBe(areaPecho.alto_cm);
     expect(layout.logo!.y_px).toBe(pecho.logo!.y_px);
   });
+
+  // F2.3 — unidad de dibujo parametrizada (px del navegador / pt del PDF).
+
+  it("unidad px y pt: mismas proporciones, solo cambia la escala base", () => {
+    const px = calcularLayoutMockup(entrada({ ubicacion: "espalda", logo_ancho_cm: 25, logo_alto_cm: 30 }));
+    const pt = calcularLayoutMockup(
+      entrada({ ubicacion: "espalda", logo_ancho_cm: 25, logo_alto_cm: 30, unidad: "pt" }),
+    );
+    const factor = pt.escala_px_por_cm / px.escala_px_por_cm;
+    const areaPx = areaDisponible(px.area);
+    const areaPt = areaDisponible(pt.area);
+
+    expect(px.unidad).toBe("px");
+    expect(pt.unidad).toBe("pt");
+    expect(pt.svg_ancho_px / pt.svg_alto_px).toBeCloseTo(px.svg_ancho_px / px.svg_alto_px, 10);
+    for (const clave of ["x_px", "y_px", "ancho_px", "alto_px"] as const) {
+      expect(areaPt[clave]).toBeCloseTo(areaPx[clave] * factor, 10);
+      expect(pt.logo![clave]).toBeCloseTo(px.logo![clave] * factor, 10);
+    }
+    expect(pt.tamano_fuente_etiqueta_px).toBeCloseTo(px.tamano_fuente_etiqueta_px * factor, 10);
+    // Lo que no depende de la escala es idéntico.
+    expect(pt.vista).toBe(px.vista);
+    expect(pt.logo!.excede_area).toBe(px.logo!.excede_area);
+    expect(pt.etiqueta_dimensiones).toBe(px.etiqueta_dimensiones);
+    expect(pt.warnings).toEqual(px.warnings);
+  });
+
+  it("unidad pt: la prenda ocupa 180 pt de ancho y el alto es proporcional", () => {
+    const polo = calcularLayoutMockup(entrada({ unidad: "pt" }));
+    // Polo 50 × 70 cm → 180 pt × 252 pt.
+    expect(polo.escala_px_por_cm).toBeCloseTo(180 / 50, 10);
+    expect(polo.svg_ancho_px).toBeCloseTo(180, 10);
+    expect(polo.svg_alto_px).toBeCloseTo(252, 10);
+    expect(polo.logo!.ancho_px).toBeCloseTo(9 * (180 / 50), 10);
+
+    // Otra prenda: mismo ancho, distinto alto. `alto_pixels` no influye en pt.
+    const toalla = calcularLayoutMockup(
+      entrada({ tipo_prenda: "toalla", unidad: "pt", alto_pixels: 999 }),
+    );
+    expect(toalla.svg_ancho_px).toBeCloseTo(180, 10);
+    expect(toalla.svg_alto_px).toBeCloseTo(360, 10);
+
+    const estrecho = calcularLayoutMockup(entrada({ unidad: "pt", ancho_pt: 90 }));
+    expect(estrecho.svg_ancho_px).toBeCloseTo(90, 10);
+  });
 });

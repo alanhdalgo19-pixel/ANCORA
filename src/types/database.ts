@@ -7,6 +7,11 @@
 import type { FormatoLogo } from "@/lib/logos/validar";
 export type { FormatoLogo };
 
+// Mismo criterio para el enum `tipo_mockup_enum` (F2.3): la lista vive junto a
+// las dimensiones de cada prenda en `src/lib/mockup/dimensiones-prendas.ts`.
+import type { TipoPrenda } from "@/lib/mockup/dimensiones-prendas";
+export type TipoMockup = TipoPrenda;
+
 export type Rol = "admin" | "operador" | "consulta";
 export type TipoCliente = "esporadico" | "habitual";
 export type TipoProveedor = "urgencia" | "precio" | "calidad";
@@ -103,6 +108,8 @@ export interface Prenda {
   disponible_oscuro: boolean;
   descripcion: string | null;
   activo: boolean;
+  /** F2.3 — null en prendas sin clasificar: el mockup las pinta como "otro". */
+  tipo_mockup: TipoMockup | null;
 }
 
 export interface Tecnica {

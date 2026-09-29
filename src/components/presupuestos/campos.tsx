@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NOMBRE_POSICION } from "@/lib/presupuestos/descripciones";
 import { cn } from "@/lib/utils";
@@ -141,6 +142,65 @@ export function Aviso({
     >
       {children}
     </p>
+  );
+}
+
+/**
+ * Ancho y alto del logo cuando NO influyen en el precio (serigrafía, impresión
+ * directa, sublimación): son opcionales y solo sirven para el mockup (F2.3).
+ * Recibe las props del input ya preparadas (`register` de react-hook-form o
+ * `value`/`onChange` controlados), así vale para los dos tipos de formulario.
+ */
+export function CamposMedidasMockup({
+  idPrefijo,
+  propsAncho,
+  propsAlto,
+  errorAncho,
+  errorAlto,
+  disabled = false,
+}: {
+  idPrefijo: string;
+  propsAncho: ComponentProps<typeof Input>;
+  propsAlto: ComponentProps<typeof Input>;
+  errorAncho?: string;
+  errorAlto?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium leading-none text-foreground">
+        Medidas del logo{" "}
+        <span className="font-normal text-muted-foreground">(opcional)</span>
+      </legend>
+      <p className="text-xs text-muted-foreground">
+        No cambian el precio: solo sirven para ver el logo sobre la prenda en el
+        mockup y en el PDF.
+      </p>
+      <div className="grid max-w-md grid-cols-2 gap-4">
+        <Campo htmlFor={`${idPrefijo}-ancho`} label="Ancho (cm)" error={errorAncho}>
+          <Input
+            id={`${idPrefijo}-ancho`}
+            type="number"
+            step="0.1"
+            min={0}
+            inputMode="decimal"
+            disabled={disabled}
+            {...propsAncho}
+          />
+        </Campo>
+        <Campo htmlFor={`${idPrefijo}-alto`} label="Alto (cm)" error={errorAlto}>
+          <Input
+            id={`${idPrefijo}-alto`}
+            type="number"
+            step="0.1"
+            min={0}
+            inputMode="decimal"
+            disabled={disabled}
+            {...propsAlto}
+          />
+        </Campo>
+      </div>
+    </fieldset>
   );
 }
 

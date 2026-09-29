@@ -1,17 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { TablaPrendas } from "@/components/admin/TablaPrendas";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import type { Tejido } from "@/types/database";
+import { esTipoPrenda } from "@/lib/mockup/dimensiones-prendas";
+import type { Tejido, TipoMockup } from "@/types/database";
 
 interface AdminPrendasPageProps {
   searchParams: { proveedor?: string; tejido?: string };
@@ -31,7 +23,9 @@ export default async function AdminPrendasPage({
 
   let listado = supabase
     .from("prendas")
-    .select("id, codigo_interno, nombre, modelo, tejido, proveedor_id, proveedores(nombre)")
+    .select(
+      "id, codigo_interno, nombre, modelo, tejido, proveedor_id, tipo_mockup, proveedores(nombre)",
+    )
     .eq("activo", true)
     .order("nombre");
 
@@ -101,61 +95,22 @@ export default async function AdminPrendasPage({
         </Button>
       </form>
 
-      <div className="mt-6 rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Código</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Proveedor</TableHead>
-              <TableHead>Tejido</TableHead>
-              <TableHead>Precios</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {prendas?.length ? (
-              prendas.map((prenda) => {
-                const tienePrecios = (maximoPrecioPorPrenda.get(prenda.id) ?? 0) > 0;
-                return (
-                  <TableRow key={prenda.id}>
-                    <TableCell className="font-mono text-xs">
-                      {prenda.codigo_interno}
-                    </TableCell>
-                    <TableCell className="font-medium">{prenda.nombre}</TableCell>
-                    <TableCell>
-                      {(prenda.proveedores as unknown as { nombre: string } | null)
-                        ?.nombre ?? "—"}
-                    </TableCell>
-                    <TableCell>{ETIQUETA_TEJIDO[prenda.tejido as Tejido]}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={tienePrecios ? "default" : "destructive"}
-                        className={cn(!tienePrecios && "bg-danger text-white")}
-                      >
-                        {tienePrecios ? "Con precios" : "Sin precios"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/admin/prendas/${prenda.id}`}>Ver ficha</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-8 text-center text-sm text-muted-foreground"
-                >
-                  No hay prendas que coincidan con el filtro.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+      <div className="mt-6">
+        <TablaPrendas
+          prendas={(prendas ?? []).map((prenda) => ({
+            id: prenda.id as string,
+            codigo_interno: prenda.codigo_interno as string,
+            nombre: prenda.nombre as string,
+            proveedor:
+              (prenda.proveedores as unknown as { nombre: string } | null)
+                ?.nombre ?? "—",
+            tejido: ETIQUETA_TEJIDO[prenda.tejido as Tejido],
+            tiene_precios: (maximoPrecioPorPrenda.get(prenda.id) ?? 0) > 0,
+            tipo_mockup: esTipoPrenda(String(prenda.tipo_mockup ?? ""))
+              ? (prenda.tipo_mockup as TipoMockup)
+              : null,
+          }))}
+        />
       </div>
     </main>
   );

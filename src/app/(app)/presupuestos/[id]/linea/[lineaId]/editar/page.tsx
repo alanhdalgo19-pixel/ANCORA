@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient, getUserRole } from "@/lib/supabase/server";
 import {
+  cargarLogosWizard,
   cargarParametrosWizard,
   cargarPrendas,
   reconstruirDatosLinea,
@@ -21,7 +22,7 @@ export default async function EditarLineaPage({
     supabase
       .from("presupuestos")
       .select(
-        "id, numero, estado, clientes(nombre, tipo_cliente, descuento_bordado_pct)",
+        "id, numero, estado, cliente_id, clientes(nombre, tipo_cliente, descuento_bordado_pct)",
       )
       .eq("id", params.id)
       .maybeSingle(),
@@ -82,9 +83,10 @@ export default async function EditarLineaPage({
     ? presupuesto.clientes[0]
     : presupuesto.clientes;
 
-  const [prendas, parametros] = await Promise.all([
+  const [prendas, parametros, logosCliente] = await Promise.all([
     cargarPrendas(supabase),
     cargarParametrosWizard(supabase),
+    cargarLogosWizard(supabase, presupuesto.cliente_id as string),
   ]);
 
   return (
@@ -104,6 +106,7 @@ export default async function EditarLineaPage({
       }
       prendas={prendas}
       parametros={parametros}
+      logosCliente={logosCliente}
       lineaId={params.lineaId}
       valorInicial={valorInicial}
     />

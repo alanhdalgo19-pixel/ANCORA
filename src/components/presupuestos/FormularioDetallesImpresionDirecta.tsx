@@ -4,6 +4,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import {
+  useCambioMockup,
+  type AvisoCambioMockup,
+} from "@/hooks/use-cambio-mockup";
 import { formatEuros } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DetallesTecnica, ParametrosWizard } from "@/types/presupuestos";
@@ -11,6 +15,7 @@ import {
   Aviso,
   BotonesPaso,
   Campo,
+  CamposMedidasMockup,
   CasillaVerificacion,
   SelectorPosicion,
 } from "./campos";
@@ -20,9 +25,17 @@ const esquema = z.object({
   num_colores: z.union([z.literal(1), z.literal(2)]),
   prenda_oscura: z.boolean(),
   incluir_vectorizacion: z.boolean(),
+  // Solo para el mockup (F2.3): el precio no depende del tamaño del logo.
+  ancho_logo_cm: z.number().positive("Debe ser mayor que cero").nullable().optional(),
+  alto_logo_cm: z.number().positive("Debe ser mayor que cero").nullable().optional(),
 });
 
 type Valores = z.infer<typeof esquema>;
+
+/** Campo numérico opcional: vacío → null. */
+const numeroOpcional = {
+  setValueAs: (valor: string) => (valor === "" ? null : Number(valor)),
+};
 
 interface Props {
   valorInicial: Extract<
@@ -34,6 +47,8 @@ interface Props {
   calculando: boolean;
   onVolver: () => void;
   onContinuar: (detalles: DetallesTecnica) => void;
+  /** F2.3 — medidas en vivo para el mockup de la columna derecha. */
+  onCambioMockup?: AvisoCambioMockup;
 }
 
 export function FormularioDetallesImpresionDirecta({
@@ -43,14 +58,23 @@ export function FormularioDetallesImpresionDirecta({
   calculando,
   onVolver,
   onContinuar,
+  onCambioMockup,
 }: Props) {
-  const { handleSubmit, watch, setValue } = useForm<Valores>({
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<Valores>({
     resolver: zodResolver(esquema),
     defaultValues: {
       ubicacion: valorInicial?.ubicacion ?? "pecho",
       num_colores: valorInicial?.num_colores ?? 1,
       prenda_oscura: valorInicial?.prenda_oscura ?? false,
       incluir_vectorizacion: valorInicial?.incluir_vectorizacion ?? false,
+      ancho_logo_cm: valorInicial?.ancho_logo_cm ?? null,
+      alto_logo_cm: valorInicial?.alto_logo_cm ?? null,
     },
   });
 
@@ -58,6 +82,17 @@ export function FormularioDetallesImpresionDirecta({
   const numColores = watch("num_colores");
   const prendaOscura = watch("prenda_oscura");
   const vectorizacion = watch("incluir_vectorizacion");
+
+  useCambioMockup(
+    [
+      {
+        ubicacion,
+        ancho_cm: watch("ancho_logo_cm"),
+        alto_cm: watch("alto_logo_cm"),
+      },
+    ],
+    onCambioMockup,
+  );
 
   const errorColores =
     errorMotor && /color/i.test(errorMotor) ? errorMotor : null;
@@ -72,6 +107,8 @@ export function FormularioDetallesImpresionDirecta({
           num_colores: valores.num_colores,
           prenda_oscura: valores.prenda_oscura,
           incluir_vectorizacion: valores.incluir_vectorizacion,
+          ancho_logo_cm: valores.ancho_logo_cm ?? null,
+          alto_logo_cm: valores.alto_logo_cm ?? null,
         }),
       )}
       className="space-y-6"
@@ -92,6 +129,15 @@ export function FormularioDetallesImpresionDirecta({
           }}
         />
       </Campo>
+
+      <CamposMedidasMockup
+        idPrefijo="impresion-logo"
+        disabled={calculando}
+        propsAncho={register("ancho_logo_cm", numeroOpcional)}
+        propsAlto={register("alto_logo_cm", numeroOpcional)}
+        errorAncho={errors.ancho_logo_cm?.message}
+        errorAlto={errors.alto_logo_cm?.message}
+      />
 
       <Campo label="Número de colores" error={errorColores ?? undefined}>
         <div className="flex flex-wrap gap-2" role="radiogroup">

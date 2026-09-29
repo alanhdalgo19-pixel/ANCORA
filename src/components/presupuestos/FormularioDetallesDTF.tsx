@@ -7,6 +7,10 @@ import { z } from "zod";
 import { previsualizarComposicionDTF } from "@/app/(app)/presupuestos/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  useCambioMockup,
+  type AvisoCambioMockup,
+} from "@/hooks/use-cambio-mockup";
 import { formatEuros, formatMedida } from "@/lib/format";
 import { NOMBRE_POSICION } from "@/lib/presupuestos/descripciones";
 import type { Posicion } from "@/types/database";
@@ -48,6 +52,8 @@ interface Props {
   calculando: boolean;
   onVolver: () => void;
   onContinuar: (detalles: DetallesTecnica) => void;
+  /** F2.3 — medidas en vivo para el mockup de la columna derecha. */
+  onCambioMockup?: AvisoCambioMockup;
 }
 
 const LOGO_VACIO: LogoDTFWizard = {
@@ -66,6 +72,7 @@ export function FormularioDetallesDTF({
   calculando,
   onVolver,
   onContinuar,
+  onCambioMockup,
 }: Props) {
   // Un logo que no cabe a lo ancho del rollo obliga a rotarlo o a reducirlo:
   // el bin packing no puede partirlo (CLAUDE.md 7.2 y Prompt 8, parte E.1).
@@ -120,6 +127,15 @@ export function FormularioDetallesDTF({
     presupuestoId,
     cantidad,
     logos,
+  );
+
+  useCambioMockup(
+    (logos ?? []).map((logo) => ({
+      ubicacion: logo.posicion,
+      ancho_cm: logo.ancho_cm,
+      alto_cm: logo.alto_cm,
+    })),
+    onCambioMockup,
   );
 
   const erroresLogos = errors.logos;

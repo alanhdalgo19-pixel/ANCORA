@@ -5,6 +5,7 @@ import { Check, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import type { TipoMockup } from "@/types/database";
 
 export interface PrendaOpcion {
   id: string;
@@ -13,6 +14,8 @@ export interface PrendaOpcion {
   proveedor_id: string;
   proveedor_nombre: string;
   disponible_oscuro: boolean;
+  /** F2.3 — qué mockup pintar; "otro" si la prenda no está clasificada. */
+  tipo_mockup: TipoMockup;
 }
 
 interface SelectorPrendaProps {

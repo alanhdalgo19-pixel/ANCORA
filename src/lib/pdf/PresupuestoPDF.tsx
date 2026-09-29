@@ -24,7 +24,9 @@ import type {
   TipoCliente,
 } from "@/types/database";
 import type { LineaVista } from "@/types/presupuestos";
+import { leerMockupSnapshot } from "@/lib/mockup/snapshot";
 import { LogoAncora } from "./logo";
+import { MockupPDF, type FuenteLogoPDF } from "./MockupPDF";
 import { COLOR, COLUMNAS, estilos } from "./styles";
 
 export interface PresupuestoPDFProps {
@@ -33,6 +35,11 @@ export interface PresupuestoPDFProps {
   nombreEmisor: string;
   lineas: LineaVista[];
   empresa: typeof EMPRESA;
+  /**
+   * F2.3 — logos de los mockups ya resueltos, por `logo_id` del snapshot
+   * (URL firmada del bucket). Un logo que falte aquí se pinta como caja vacía.
+   */
+  logosMockup?: Record<string, FuenteLogoPDF>;
 }
 
 const ETIQUETA_ESTADO: Record<EstadoPresupuesto, string> = {
@@ -175,7 +182,13 @@ function Comentario({
   );
 }
 
-function TablaLineas({ lineas }: { lineas: LineaVista[] }) {
+function TablaLineas({
+  lineas,
+  logosMockup,
+}: {
+  lineas: LineaVista[];
+  logosMockup: Record<string, FuenteLogoPDF>;
+}) {
   return (
     <View style={estilos.tabla}>
       {/* Sin `fixed`: repetiría la cabecera de la tabla en TODAS las páginas,
@@ -226,6 +239,12 @@ function TablaLineas({ lineas }: { lineas: LineaVista[] }) {
         // Una línea DTF compuesta enumera sus logos debajo, con el mismo
         // estilo indentado y atenuado que usan las líneas extra.
         const logos = sublineasLogosComposicion(linea.detalle_calculo);
+        // F2.3 — el mockup va debajo de la descripción, dentro de la misma
+        // columna: cantidad, precio e importe siguen alineados arriba.
+        const mockup =
+          linea.tipo_linea === "tecnica"
+            ? leerMockupSnapshot(linea.detalle_calculo)
+            : null;
 
         return (
           <View key={linea.id} style={estilos.fila} wrap={false}>
@@ -239,6 +258,14 @@ function TablaLineas({ lineas }: { lineas: LineaVista[] }) {
                   · {logo}
                 </Text>
               ))}
+              {mockup && mockup.logos.length > 0 && (
+                <MockupPDF
+                  mockup={mockup}
+                  fuenteLogo={
+                    mockup.logo_id ? (logosMockup[mockup.logo_id] ?? null) : null
+                  }
+                />
+              )}
             </View>
             <Text
               style={[
@@ -396,6 +423,7 @@ export function PresupuestoPDF({
   nombreEmisor,
   lineas,
   empresa,
+  logosMockup = {},
 }: PresupuestoPDFProps) {
   return (
     <Document
@@ -416,7 +444,7 @@ export function PresupuestoPDF({
         {(cliente.persona_contacto || presupuesto.notas) && (
           <Comentario cliente={cliente} notas={presupuesto.notas} />
         )}
-        <TablaLineas lineas={lineas} />
+        <TablaLineas lineas={lineas} logosMockup={logosMockup} />
         <TotalesPDF presupuesto={presupuesto} />
         <NotasEstandar />
         <DatosPagoYFirma empresa={empresa} cliente={cliente} />

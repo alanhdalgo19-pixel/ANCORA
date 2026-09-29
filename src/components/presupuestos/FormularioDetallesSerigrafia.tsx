@@ -5,6 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  useCambioMockup,
+  type AvisoCambioMockup,
+} from "@/hooks/use-cambio-mockup";
 import { formatEuros } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DetallesTecnica, ParametrosWizard } from "@/types/presupuestos";
@@ -12,6 +16,7 @@ import {
   Aviso,
   BotonesPaso,
   Campo,
+  CamposMedidasMockup,
   CasillaVerificacion,
   SelectorPosicion,
 } from "./campos";
@@ -24,7 +29,15 @@ const esquema = z.object({
   incluir_vectorizacion: z.boolean(),
   incluir_pantone: z.boolean(),
   cantidad_pantones: z.number().int().min(1).nullable().optional(),
+  // Solo para el mockup (F2.3): el precio de serigrafía no depende del tamaño.
+  ancho_logo_cm: z.number().positive("Debe ser mayor que cero").nullable().optional(),
+  alto_logo_cm: z.number().positive("Debe ser mayor que cero").nullable().optional(),
 });
+
+/** Campo numérico opcional: vacío → null. */
+const numeroOpcional = {
+  setValueAs: (valor: string) => (valor === "" ? null : Number(valor)),
+};
 
 type Valores = z.infer<typeof esquema>;
 
@@ -35,6 +48,8 @@ interface Props {
   calculando: boolean;
   onVolver: () => void;
   onContinuar: (detalles: DetallesTecnica) => void;
+  /** F2.3 — medidas en vivo para el mockup de la columna derecha. */
+  onCambioMockup?: AvisoCambioMockup;
 }
 
 export function FormularioDetallesSerigrafia({
@@ -44,6 +59,7 @@ export function FormularioDetallesSerigrafia({
   calculando,
   onVolver,
   onContinuar,
+  onCambioMockup,
 }: Props) {
   const {
     register,
@@ -61,6 +77,8 @@ export function FormularioDetallesSerigrafia({
       incluir_vectorizacion: valorInicial?.incluir_vectorizacion ?? false,
       incluir_pantone: valorInicial?.incluir_pantone ?? false,
       cantidad_pantones: valorInicial?.cantidad_pantones ?? null,
+      ancho_logo_cm: valorInicial?.ancho_logo_cm ?? null,
+      alto_logo_cm: valorInicial?.alto_logo_cm ?? null,
     },
   });
 
@@ -70,6 +88,17 @@ export function FormularioDetallesSerigrafia({
   const trabajoNuevo = watch("trabajo_nuevo");
   const vectorizacion = watch("incluir_vectorizacion");
   const pantone = watch("incluir_pantone");
+
+  useCambioMockup(
+    [
+      {
+        ubicacion,
+        ancho_cm: watch("ancho_logo_cm"),
+        alto_cm: watch("alto_logo_cm"),
+      },
+    ],
+    onCambioMockup,
+  );
 
   const fotolito =
     ubicacion === "pecho"
@@ -94,6 +123,8 @@ export function FormularioDetallesSerigrafia({
           cantidad_pantones: valores.incluir_pantone
             ? (valores.cantidad_pantones ?? null)
             : null,
+          ancho_logo_cm: valores.ancho_logo_cm ?? null,
+          alto_logo_cm: valores.alto_logo_cm ?? null,
         }),
       )}
       className="space-y-6"
@@ -114,6 +145,15 @@ export function FormularioDetallesSerigrafia({
           }}
         />
       </Campo>
+
+      <CamposMedidasMockup
+        idPrefijo="serigrafia-logo"
+        disabled={calculando}
+        propsAncho={register("ancho_logo_cm", numeroOpcional)}
+        propsAlto={register("alto_logo_cm", numeroOpcional)}
+        errorAncho={errors.ancho_logo_cm?.message}
+        errorAlto={errors.alto_logo_cm?.message}
+      />
 
       <Campo label="Número de colores" error={errorColores ?? undefined}>
         <div className="flex flex-wrap gap-2" role="radiogroup">
