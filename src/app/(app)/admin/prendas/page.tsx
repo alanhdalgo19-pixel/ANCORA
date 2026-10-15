@@ -36,12 +36,24 @@ export default async function AdminPrendasPage({
     listado = listado.eq("tejido", searchParams.tejido);
   }
 
-  const [{ data: prendas }, { data: proveedores }, { data: preciosPrenda }] =
-    await Promise.all([
-      listado,
-      supabase.from("proveedores").select("id, nombre").eq("activo", true).order("nombre"),
-      supabase.from("precios_prenda").select("prenda_id, precio"),
-    ]);
+  const [
+    { data: prendas },
+    { data: proveedores },
+    { data: preciosPrenda },
+    { data: fotosPrenda },
+  ] = await Promise.all([
+    listado,
+    supabase.from("proveedores").select("id, nombre").eq("activo", true).order("nombre"),
+    supabase.from("precios_prenda").select("prenda_id, precio"),
+    // F2.4 — una foto principal por color: el recuento va de 0 a 3.
+    supabase.from("prendas_fotos").select("prenda_id").eq("es_principal", true),
+  ]);
+
+  const fotosPorPrenda = new Map<string, number>();
+  for (const fila of fotosPrenda ?? []) {
+    const id = fila.prenda_id as string;
+    fotosPorPrenda.set(id, (fotosPorPrenda.get(id) ?? 0) + 1);
+  }
 
   const maximoPrecioPorPrenda = new Map<string, number>();
   for (const fila of preciosPrenda ?? []) {
@@ -109,6 +121,7 @@ export default async function AdminPrendasPage({
             tipo_mockup: esTipoPrenda(String(prenda.tipo_mockup ?? ""))
               ? (prenda.tipo_mockup as TipoMockup)
               : null,
+            num_fotos: fotosPorPrenda.get(prenda.id as string) ?? 0,
           }))}
         />
       </div>

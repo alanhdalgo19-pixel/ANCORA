@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Mockup } from "@/components/mockup/Mockup";
 import type { ColorGrupo } from "@/lib/calculos/types";
+import type { FotoPrendaMockup } from "@/lib/mockup/calcular-layout";
 import type { TipoPrenda } from "@/lib/mockup/dimensiones-prendas";
 import type { LogoMockupSnapshot } from "@/lib/mockup/snapshot";
 import { NOMBRE_POSICION } from "@/lib/presupuestos/descripciones";
@@ -26,12 +27,23 @@ interface Props {
   colorPrenda: ColorGrupo;
   logo: LogoWizard | null;
   logos: LogoMockupSnapshot[];
+  /** F2.4 — foto real de la prenda en el color elegido, si existe. */
+  foto: FotoPrendaMockup | null;
+  /** F2.4 — solo admin ve el aviso "foto genérica". */
+  mostrarBadgeFotoGenerica: boolean;
 }
 
-export function MockupPreview({ tipoPrenda, colorPrenda, logo, logos }: Props) {
+export function MockupPreview({
+  tipoPrenda,
+  colorPrenda,
+  logo,
+  logos,
+  foto,
+  mostrarBadgeFotoGenerica,
+}: Props) {
   const entrada = useMemo(
-    () => ({ tipoPrenda, colorPrenda, logo, logos }),
-    [tipoPrenda, colorPrenda, logo, logos],
+    () => ({ tipoPrenda, colorPrenda, logo, logos, foto }),
+    [tipoPrenda, colorPrenda, logo, logos, foto],
   );
 
   const [vista, setVista] = useState(entrada);
@@ -69,6 +81,8 @@ export function MockupPreview({ tipoPrenda, colorPrenda, logo, logos }: Props) {
             logo_alto_cm={actual.alto_cm}
             ubicacion={actual.ubicacion}
             alto_pixels={ALTO_MOCKUP_PX}
+            foto={vista.foto}
+            mostrar_badge_foto_generica={mostrarBadgeFotoGenerica}
           />
         </div>
       ) : (

@@ -29,17 +29,48 @@ function num(valor: unknown, porDefecto = 0): number {
   return Number.isFinite(n) ? n : porDefecto;
 }
 
+/**
+ * F2.4 — fotos principales de todo el catálogo, agrupadas por prenda y color.
+ * Son pocas filas (≤ 3 por prenda), así que se cargan de una vez con el
+ * catálogo y el mockup cambia de foto al instante al tocar el color, sin ir
+ * al servidor. La URL es `/api/prendas-fotos/{id}`, que firma al vuelo.
+ */
+async function cargarFotosCatalogo(
+  supabase: SupabaseServerClient,
+): Promise<Map<string, PrendaOpcion["fotos"]>> {
+  const { data } = await supabase
+    .from("prendas_fotos")
+    .select("id, prenda_id, color_grupo, ancho_px, alto_px")
+    .eq("es_principal", true);
+
+  const fotos = new Map<string, PrendaOpcion["fotos"]>();
+  for (const fila of data ?? []) {
+    const prendaId = fila.prenda_id as string;
+    const porColor = fotos.get(prendaId) ?? {};
+    porColor[fila.color_grupo as ColorGrupo] = {
+      url: `/api/prendas-fotos/${fila.id as string}`,
+      ancho_px: (fila.ancho_px as number | null) ?? null,
+      alto_px: (fila.alto_px as number | null) ?? null,
+    };
+    fotos.set(prendaId, porColor);
+  }
+  return fotos;
+}
+
 /** Catálogo de prendas activas con el nombre de su proveedor. */
 export async function cargarPrendas(
   supabase: SupabaseServerClient,
 ): Promise<PrendaOpcion[]> {
-  const { data } = await supabase
-    .from("prendas")
-    .select(
-      "id, codigo_interno, nombre, proveedor_id, disponible_oscuro, tipo_mockup, proveedores(nombre)",
-    )
-    .eq("activo", true)
-    .order("nombre");
+  const [{ data }, fotos] = await Promise.all([
+    supabase
+      .from("prendas")
+      .select(
+        "id, codigo_interno, nombre, proveedor_id, disponible_oscuro, tipo_mockup, proveedores(nombre)",
+      )
+      .eq("activo", true)
+      .order("nombre"),
+    cargarFotosCatalogo(supabase),
+  ]);
 
   return (data ?? []).map((fila) => {
     // La relación llega como objeto (many-to-one) pero PostgREST puede
@@ -57,6 +88,7 @@ export async function cargarPrendas(
         (proveedor as { nombre?: string } | null)?.nombre ?? "Sin proveedor",
       disponible_oscuro: fila.disponible_oscuro === true,
       tipo_mockup: resolverTipoPrenda(fila.tipo_mockup as string | null),
+      fotos: fotos.get(fila.id as string) ?? {},
     };
   });
 }

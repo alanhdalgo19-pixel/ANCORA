@@ -38,6 +38,12 @@ export interface MockupSnapshot {
   logo_formato: FormatoLogo | null;
   tipo_prenda: TipoPrenda;
   color_prenda: ColorGrupo;
+  /**
+   * F2.4 — prenda del catálogo, para buscar su foto real al pintar el PDF.
+   * null si el cliente aporta la prenda o si la línea es anterior a F2.4
+   * (entonces el PDF pinta el rectángulo abstracto, como hasta ahora).
+   */
+  prenda_id: string | null;
   logos: LogoMockupSnapshot[];
 }
 
@@ -111,6 +117,7 @@ export function construirMockupSnapshot(entrada: {
   tipo_mockup: string | null | undefined;
   color_grupo: ColorGrupo | null;
   logo: LogoElegido | null;
+  prenda_id?: string | null;
 }): MockupSnapshot | null {
   const logos = logosMockupDeDetalles(entrada.detalles);
   if (!logos.length && !entrada.logo) return null;
@@ -124,6 +131,7 @@ export function construirMockupSnapshot(entrada: {
     // Sin prenda del catálogo (el cliente la aporta) no se sabe el color: se
     // pinta en blanco, que es el fondo más neutro.
     color_prenda: entrada.color_grupo ?? "blanco",
+    prenda_id: entrada.prenda_id ?? null,
     logos,
   };
 }
@@ -187,6 +195,7 @@ export function leerMockupSnapshot(detalleCalculo: unknown): MockupSnapshot | nu
         : null,
     tipo_prenda: resolverTipoPrenda(texto(bloque, "tipo_prenda")),
     color_prenda: color && COLORES.includes(color) ? color : "blanco",
+    prenda_id: texto(bloque, "prenda_id"),
     logos,
   };
 }

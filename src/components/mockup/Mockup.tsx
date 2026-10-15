@@ -10,6 +10,10 @@
 // El logo se carga con `<image href>`. Un SVG referenciado así se renderiza en
 // modo estático seguro (sin scripts ni recursos externos), igual que con
 // `<img>` en la biblioteca de logos (F2.1).
+//
+// F2.4 — si llega `foto`, la prenda es la foto real del catálogo y el logo se
+// funde con ella con `mix-blend-mode: multiply` (salvo en prendas oscuras, ver
+// `MezclaLogo`). Sin foto, todo sigue como en F2.2.
 
 import { TriangleAlert } from "lucide-react";
 import type { ColorGrupo, Ubicacion } from "@/lib/calculos/types";
@@ -17,8 +21,10 @@ import {
   ALTO_PIXELS_POR_DEFECTO,
   AVISO_UBICACION_NO_DISPONIBLE,
   calcularLayoutMockup,
+  type FotoPrendaMockup,
 } from "@/lib/mockup/calcular-layout";
 import { AreaImprimible } from "./AreaImprimible";
+import { BadgeFotoGenerica } from "./BadgeFotoGenerica";
 import { EtiquetaDimensiones } from "./EtiquetaDimensiones";
 
 const COLOR_EXCEDE = "#C62828";
@@ -34,6 +40,13 @@ export interface MockupProps {
   alto_pixels?: number;
   mostrar_dimensiones?: boolean;
   mostrar_area_imprimible?: boolean;
+  /** F2.4 — foto real de la prenda en ese color; sin ella, rectángulo abstracto. */
+  foto?: FotoPrendaMockup | null;
+  /**
+   * F2.4 — enseña el aviso "foto genérica" cuando no hay foto. Solo debe
+   * activarse para admin: para el resto el fallback es silencioso.
+   */
+  mostrar_badge_foto_generica?: boolean;
 }
 
 export function Mockup({
@@ -46,6 +59,8 @@ export function Mockup({
   alto_pixels = ALTO_PIXELS_POR_DEFECTO,
   mostrar_dimensiones = true,
   mostrar_area_imprimible = true,
+  foto = null,
+  mostrar_badge_foto_generica = false,
 }: MockupProps) {
   const layout = calcularLayoutMockup({
     tipo_prenda,
@@ -55,9 +70,11 @@ export function Mockup({
     logo_alto_cm,
     ubicacion,
     alto_pixels,
+    foto,
   });
 
   const { prenda, area, logo } = layout;
+  const conFoto = layout.foto !== null;
   const fuente = layout.tamano_fuente_etiqueta_px;
   const fuenteTitulo = layout.tamano_fuente_titulo_px;
   const centroX = layout.svg_ancho_px / 2;
@@ -85,40 +102,68 @@ export function Mockup({
         aria-label={descripcion}
         className="max-w-full"
       >
-        {/* Prenda */}
-        <rect
-          x={0.5}
-          y={0.5}
-          width={layout.svg_ancho_px - 1}
-          height={layout.svg_alto_px - 1}
-          rx={layout.escala_px_por_cm * 1.5}
-          fill={prenda.color_fondo}
-          stroke={prenda.color_borde}
-          strokeWidth={1}
-        />
+        {/* Prenda: foto real o rectángulo abstracto */}
+        {layout.foto ? (
+          <>
+            <image
+              href={layout.foto.url}
+              x={0}
+              y={0}
+              width={layout.svg_ancho_px}
+              height={layout.svg_alto_px}
+              preserveAspectRatio="xMidYMid slice"
+            />
+            <rect
+              x={0.5}
+              y={0.5}
+              width={layout.svg_ancho_px - 1}
+              height={layout.svg_alto_px - 1}
+              fill="none"
+              stroke={prenda.color_borde}
+              strokeWidth={1}
+            />
+          </>
+        ) : (
+          <rect
+            x={0.5}
+            y={0.5}
+            width={layout.svg_ancho_px - 1}
+            height={layout.svg_alto_px - 1}
+            rx={layout.escala_px_por_cm * 1.5}
+            fill={prenda.color_fondo}
+            stroke={prenda.color_borde}
+            strokeWidth={1}
+          />
+        )}
 
-        {/* Banda que distingue la vista trasera */}
+        {/* Banda que distingue la vista trasera. Con foto es más opaca: la
+            foto es la delantera (una por color) y la banda tiene que dejar
+            claro que el logo va detrás. */}
         {layout.vista === "trasera" && (
           <rect
             x={0.5}
             y={0.5}
             width={layout.svg_ancho_px - 1}
             height={layout.banda_trasera_alto_px}
-            fill={prenda.color_texto}
-            fillOpacity={0.08}
+            fill={conFoto ? prenda.color_fondo : prenda.color_texto}
+            fillOpacity={conFoto ? 0.85 : 0.08}
           />
         )}
 
-        <text
-          x={centroX}
-          y={tituloY}
-          textAnchor="middle"
-          fill={prenda.color_texto}
-          fontSize={fuenteTitulo}
-          fontWeight={600}
-        >
-          {titulo}
-        </text>
+        {/* Con foto, el nombre de la prenda sobra (se ve); solo se rotula la
+            vista trasera. */}
+        {(!conFoto || layout.vista === "trasera") && (
+          <text
+            x={centroX}
+            y={tituloY}
+            textAnchor="middle"
+            fill={prenda.color_texto}
+            fontSize={fuenteTitulo}
+            fontWeight={600}
+          >
+            {titulo}
+          </text>
+        )}
 
         {area.disponible && mostrar_area_imprimible && (
           <AreaImprimible
@@ -153,6 +198,11 @@ export function Mockup({
                 width={logo.ancho_px}
                 height={logo.alto_px}
                 preserveAspectRatio="xMidYMid meet"
+                style={
+                  logo.mezcla === "multiply"
+                    ? { mixBlendMode: "multiply" }
+                    : undefined
+                }
               />
             ) : (
               <>
@@ -205,6 +255,8 @@ export function Mockup({
           </g>
         )}
       </svg>
+
+      {!conFoto && mostrar_badge_foto_generica && <BadgeFotoGenerica />}
 
       {layout.warnings.length > 0 && (
         <figcaption className="w-full max-w-sm space-y-1">

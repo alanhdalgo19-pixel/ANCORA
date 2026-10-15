@@ -805,6 +805,7 @@ export async function calcularLinea(
     tipo_mockup: prendaCalculada?.tipo_mockup ?? null,
     color_grupo: datos.prenda_id ? datos.color_grupo : null,
     logo: logoElegido,
+    prenda_id: datos.prenda_id,
   });
   const detalleCalculo = mockup
     ? { ...(resultado.detalle_calculo as Record<string, unknown>), mockup }

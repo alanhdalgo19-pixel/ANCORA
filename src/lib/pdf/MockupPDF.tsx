@@ -12,6 +12,12 @@
 //
 // `Image` de @react-pdf/renderer solo admite PNG y JPG. Un logo en PDF o en SVG
 // se dibuja como caja punteada y se nombra el archivo debajo.
+//
+// F2.4 — con `foto`, la prenda es la foto real del catálogo y el logo va
+// encima con superposición alpha simple: el PDF no tiene un equivalente fiable
+// de `mix-blend-mode: multiply`, así que se ve algo más "pegado" que en el
+// navegador (compromiso aceptado, nota 33). Sin foto, rectángulo de F2.3 y SIN
+// aviso: el cliente no tiene por qué saber que faltan fotos.
 
 import { Image, Text, View } from "@react-pdf/renderer";
 import { calcularLayoutMockup } from "@/lib/mockup/calcular-layout";
@@ -26,10 +32,25 @@ import { COLOR } from "./styles";
 /** Logo ya resuelto para pintar: URL firmada del bucket o binario (tests). */
 export type FuenteLogoPDF = string | Buffer;
 
+/** F2.4 — foto de prenda ya resuelta (PNG/JPG) para el PDF. */
+export interface FotoPrendaPDF {
+  /** URL firmada del bucket o binario (tests). */
+  fuente: string | Buffer;
+  ancho_px: number | null;
+  alto_px: number | null;
+}
+
+/** Clave de `fotosMockup`: una foto por prenda y grupo de color. */
+export function claveFotoMockup(prendaId: string, color: string): string {
+  return `${prendaId}:${color}`;
+}
+
 interface Props {
   mockup: MockupSnapshot;
   /** null si no hay logo, si su formato no es PNG/JPG o si ya no existe. */
   fuenteLogo: FuenteLogoPDF | null;
+  /** null si la prenda no tiene foto (o no es PNG/JPG): rectángulo abstracto. */
+  foto?: FotoPrendaPDF | null;
   anchoPt?: number;
 }
 
@@ -46,7 +67,12 @@ function notaLogoNoIncrustado(mockup: MockupSnapshot): string | null {
   return null;
 }
 
-export function MockupPDF({ mockup, fuenteLogo, anchoPt = ANCHO_PT }: Props) {
+export function MockupPDF({
+  mockup,
+  fuenteLogo,
+  foto = null,
+  anchoPt = ANCHO_PT,
+}: Props) {
   // En composición DTF se pinta el primer logo y debajo se listan todos
   // (multi-mockup queda para F2.4).
   const primero = mockup.logos[0];
@@ -61,9 +87,19 @@ export function MockupPDF({ mockup, fuenteLogo, anchoPt = ANCHO_PT }: Props) {
     ubicacion: primero.ubicacion,
     unidad: "pt",
     ancho_pt: anchoPt,
+    // El layout solo necesita saber que hay foto y su proporción; lo que se
+    // pinta es `foto.fuente`, que en los tests es un binario y no una URL.
+    foto: foto
+      ? {
+          url: typeof foto.fuente === "string" ? foto.fuente : "binario",
+          ancho_px: foto.ancho_px,
+          alto_px: foto.alto_px,
+        }
+      : null,
   });
 
   const { prenda, area, logo } = layout;
+  const conFoto = layout.foto !== null && foto !== null;
   const fuente = layout.tamano_fuente_etiqueta_px;
   const fuenteTitulo = layout.tamano_fuente_titulo_px;
   const titulo =
@@ -84,9 +120,24 @@ export function MockupPDF({ mockup, fuenteLogo, anchoPt = ANCHO_PT }: Props) {
           backgroundColor: prenda.color_fondo,
           borderWidth: 0.75,
           borderColor: prenda.color_borde,
-          borderRadius: layout.escala_px_por_cm * 1.5,
+          borderRadius: conFoto ? 0 : layout.escala_px_por_cm * 1.5,
         }}
       >
+        {conFoto && foto && (
+          // eslint-disable-next-line jsx-a11y/alt-text -- `Image` de react-pdf no admite alt
+          <Image
+            src={foto.fuente}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: layout.svg_ancho_px - 1.5,
+              height: layout.svg_alto_px - 1.5,
+              objectFit: "cover",
+            }}
+          />
+        )}
+
         {layout.vista === "trasera" && (
           <View
             style={{
@@ -95,30 +146,34 @@ export function MockupPDF({ mockup, fuenteLogo, anchoPt = ANCHO_PT }: Props) {
               left: 0,
               right: 0,
               height: layout.banda_trasera_alto_px,
-              backgroundColor: prenda.color_texto,
-              opacity: 0.08,
+              // Con foto (delantera), la banda tapa casi del todo para dejar
+              // claro que el logo va detrás.
+              backgroundColor: conFoto ? prenda.color_fondo : prenda.color_texto,
+              opacity: conFoto ? 0.85 : 0.08,
             }}
           />
         )}
 
-        <Text
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top:
-              layout.vista === "trasera"
-                ? (layout.banda_trasera_alto_px - fuenteTitulo) / 2
-                : fuenteTitulo * 0.5,
-            textAlign: "center",
-            fontFamily: "Helvetica-Bold",
-            fontSize: fuenteTitulo,
-            lineHeight: 1,
-            color: prenda.color_texto,
-          }}
-        >
-          {titulo}
-        </Text>
+        {(!conFoto || layout.vista === "trasera") && (
+          <Text
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top:
+                layout.vista === "trasera"
+                  ? (layout.banda_trasera_alto_px - fuenteTitulo) / 2
+                  : fuenteTitulo * 0.5,
+              textAlign: "center",
+              fontFamily: "Helvetica-Bold",
+              fontSize: fuenteTitulo,
+              lineHeight: 1,
+              color: prenda.color_texto,
+            }}
+          >
+            {titulo}
+          </Text>
+        )}
 
         {area.disponible ? (
           <>

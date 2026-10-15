@@ -14,7 +14,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { EMPRESA } from "@/lib/empresa";
 import { cargarPresupuestoCompleto } from "@/lib/presupuestos/cargar-presupuesto";
 import type { createClient } from "@/lib/supabase/server";
-import { cargarLogosMockup } from "./logos-mockup";
+import { cargarFotosMockup, cargarLogosMockup } from "./logos-mockup";
 import { PresupuestoPDF } from "./PresupuestoPDF";
 import { rutaStoragePDF } from "./nombres";
 import { subirPDF } from "./storage";
@@ -34,7 +34,10 @@ export async function generarPresupuestoPDF(
   const datos = await cargarPresupuestoCompleto(supabase, presupuestoId);
   if (!datos) return null;
 
-  const logosMockup = await cargarLogosMockup(supabase, datos.lineas);
+  const [logosMockup, fotosMockup] = await Promise.all([
+    cargarLogosMockup(supabase, datos.lineas),
+    cargarFotosMockup(supabase, datos.lineas),
+  ]);
 
   const buffer = await renderToBuffer(
     <PresupuestoPDF
@@ -44,6 +47,7 @@ export async function generarPresupuestoPDF(
       lineas={datos.lineas}
       empresa={EMPRESA}
       logosMockup={logosMockup}
+      fotosMockup={fotosMockup}
     />,
   );
 

@@ -33,6 +33,8 @@ export interface FilaPrendaAdmin {
   tejido: string;
   tiene_precios: boolean;
   tipo_mockup: TipoMockup | null;
+  /** F2.4 — fotos subidas de las 3 posibles (blanco / color / oscuro). */
+  num_fotos: number;
 }
 
 const SIN_TIPO = "";
@@ -73,6 +75,7 @@ export function TablaPrendas({ prendas }: { prendas: FilaPrendaAdmin[] }) {
               <TableHead>Tejido</TableHead>
               <TableHead>Tipo mockup</TableHead>
               <TableHead>Precios</TableHead>
+              <TableHead>Fotos</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -120,6 +123,20 @@ export function TablaPrendas({ prendas }: { prendas: FilaPrendaAdmin[] }) {
                       {prenda.tiene_precios ? "Con precios" : "Sin precios"}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/admin/prendas/${prenda.id}/fotos`}
+                      aria-label={`Fotos de ${prenda.nombre}: ${prenda.num_fotos} de 3`}
+                      className={cn(
+                        "text-sm underline-offset-2 hover:underline",
+                        prenda.num_fotos === 3
+                          ? "text-success"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {prenda.num_fotos}/3 fotos
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button asChild variant="ghost" size="sm">
                       <Link href={`/admin/prendas/${prenda.id}`}>Ver ficha</Link>
@@ -130,7 +147,7 @@ export function TablaPrendas({ prendas }: { prendas: FilaPrendaAdmin[] }) {
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-8 text-center text-sm text-muted-foreground"
                 >
                   No hay prendas que coincidan con el filtro.

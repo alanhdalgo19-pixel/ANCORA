@@ -26,7 +26,12 @@ import type {
 import type { LineaVista } from "@/types/presupuestos";
 import { leerMockupSnapshot } from "@/lib/mockup/snapshot";
 import { LogoAncora } from "./logo";
-import { MockupPDF, type FuenteLogoPDF } from "./MockupPDF";
+import {
+  claveFotoMockup,
+  MockupPDF,
+  type FotoPrendaPDF,
+  type FuenteLogoPDF,
+} from "./MockupPDF";
 import { COLOR, COLUMNAS, estilos } from "./styles";
 
 export interface PresupuestoPDFProps {
@@ -40,6 +45,8 @@ export interface PresupuestoPDFProps {
    * (URL firmada del bucket). Un logo que falte aquí se pinta como caja vacía.
    */
   logosMockup?: Record<string, FuenteLogoPDF>;
+  /** F2.4 — fotos de prenda por `claveFotoMockup(prenda_id, color)`. */
+  fotosMockup?: Record<string, FotoPrendaPDF>;
 }
 
 const ETIQUETA_ESTADO: Record<EstadoPresupuesto, string> = {
@@ -185,9 +192,11 @@ function Comentario({
 function TablaLineas({
   lineas,
   logosMockup,
+  fotosMockup,
 }: {
   lineas: LineaVista[];
   logosMockup: Record<string, FuenteLogoPDF>;
+  fotosMockup: Record<string, FotoPrendaPDF>;
 }) {
   return (
     <View style={estilos.tabla}>
@@ -263,6 +272,13 @@ function TablaLineas({
                   mockup={mockup}
                   fuenteLogo={
                     mockup.logo_id ? (logosMockup[mockup.logo_id] ?? null) : null
+                  }
+                  foto={
+                    mockup.prenda_id
+                      ? (fotosMockup[
+                          claveFotoMockup(mockup.prenda_id, mockup.color_prenda)
+                        ] ?? null)
+                      : null
                   }
                 />
               )}
@@ -424,6 +440,7 @@ export function PresupuestoPDF({
   lineas,
   empresa,
   logosMockup = {},
+  fotosMockup = {},
 }: PresupuestoPDFProps) {
   return (
     <Document
@@ -444,7 +461,11 @@ export function PresupuestoPDF({
         {(cliente.persona_contacto || presupuesto.notas) && (
           <Comentario cliente={cliente} notas={presupuesto.notas} />
         )}
-        <TablaLineas lineas={lineas} logosMockup={logosMockup} />
+        <TablaLineas
+          lineas={lineas}
+          logosMockup={logosMockup}
+          fotosMockup={fotosMockup}
+        />
         <TotalesPDF presupuesto={presupuesto} />
         <NotasEstandar />
         <DatosPagoYFirma empresa={empresa} cliente={cliente} />

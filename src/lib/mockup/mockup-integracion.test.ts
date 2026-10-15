@@ -11,7 +11,8 @@ import { describe, expect, it } from "vitest";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { EMPRESA } from "@/lib/empresa";
 import { PresupuestoPDF } from "@/lib/pdf/PresupuestoPDF";
-import { logosIncrustables } from "@/lib/pdf/logos-mockup";
+import { fotosNecesarias, logosIncrustables } from "@/lib/pdf/logos-mockup";
+import { claveFotoMockup, type FotoPrendaPDF } from "@/lib/pdf/MockupPDF";
 import { calcularLinea, ErrorCalculo } from "@/lib/presupuestos/calcular-linea";
 import { reconstruirDatosLinea } from "@/lib/presupuestos/cargar-wizard";
 import type { createClient } from "@/lib/supabase/server";
@@ -155,6 +156,8 @@ describe("mockup en el snapshot de la línea", () => {
       logo_formato: "png",
       tipo_prenda: "polo",
       color_prenda: "color",
+      // F2.4 — la prenda viaja en el snapshot para buscar su foto en el PDF.
+      prenda_id: "polo-star",
       logos: [{ ubicacion: "pecho", ancho_cm: 9, alto_cm: 4, rotado: false }],
     };
     expect(snapshot.mockup).toEqual(esperado);
@@ -369,6 +372,7 @@ describe("mockup en el PDF", () => {
       logo_formato: "pdf",
       tipo_prenda: "sudadera",
       color_prenda: "oscuro",
+      prenda_id: null,
       logos: [{ ubicacion: "espalda", ancho_cm: 40, alto_cm: 50, rotado: false }],
     };
     const lineas: LineaVista[] = [
@@ -397,5 +401,47 @@ describe("mockup en el PDF", () => {
       }),
     );
     expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  }, 30_000);
+
+  it("F2.4 — incrusta la foto real de la prenda; sin foto cae al rectángulo", async () => {
+    const calculada = await calcularLinea(supabaseFalso(), lineaDTF(), CLIENTE_DOYLE);
+    const lineas: LineaVista[] = [
+      {
+        id: "linea-1",
+        orden: 1,
+        tipo_linea: "tecnica",
+        descripcion: calculada.tecnica.descripcion,
+        cantidad: 120,
+        precio_unitario: calculada.tecnica.precio_unitario,
+        importe_linea: calculada.tecnica.importe_linea,
+        detalle_calculo: JSON.parse(JSON.stringify(calculada.tecnica.detalle_calculo)),
+        linea_padre_id: null,
+      },
+    ];
+
+    // Se pide la foto del polo en "color", una sola vez.
+    expect(fotosNecesarias(lineas)).toEqual([{ prenda_id: "polo-star", color: "color" }]);
+
+    const png = readFileSync(path.join(process.cwd(), "public", "logo-ancora.png"));
+    const renderizar = (fotosMockup: Record<string, FotoPrendaPDF>) =>
+      renderToBuffer(
+        PresupuestoPDF({
+          presupuesto: PRESUPUESTO_PDF,
+          cliente: CLIENTE_PDF,
+          nombreEmisor: "Sonia",
+          lineas,
+          empresa: EMPRESA,
+          fotosMockup,
+        }),
+      );
+    const imagenes = (pdf: Buffer) =>
+      (pdf.toString("latin1").match(/\/Subtype\s*\/Image/g) ?? []).length;
+
+    const conFoto = await renderizar({
+      [claveFotoMockup("polo-star", "color")]: { fuente: png, ancho_px: 569, alto_px: 158 },
+    });
+    const sinFoto = await renderizar({});
+
+    expect(imagenes(conFoto)).toBeGreaterThan(imagenes(sinFoto));
   }, 30_000);
 });

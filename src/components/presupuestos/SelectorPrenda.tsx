@@ -5,7 +5,8 @@ import { Check, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { TipoMockup } from "@/types/database";
+import type { FotoPrendaMockup } from "@/lib/mockup/calcular-layout";
+import type { ColorGrupo, TipoMockup } from "@/types/database";
 
 export interface PrendaOpcion {
   id: string;
@@ -16,6 +17,8 @@ export interface PrendaOpcion {
   disponible_oscuro: boolean;
   /** F2.3 — qué mockup pintar; "otro" si la prenda no está clasificada. */
   tipo_mockup: TipoMockup;
+  /** F2.4 — foto real por grupo de color; el que falte cae al rectángulo. */
+  fotos: Partial<Record<ColorGrupo, FotoPrendaMockup>>;
 }
 
 interface SelectorPrendaProps {

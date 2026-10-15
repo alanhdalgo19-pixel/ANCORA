@@ -67,9 +67,14 @@ export default async function FichaPrendaPage({ params }: FichaPrendaPageProps) 
             </Badge>
           </div>
         </div>
-        <Button asChild variant="outline">
-          <Link href={`/admin/prendas/${prenda.id}/editar`}>Editar prenda</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/admin/prendas/${prenda.id}/fotos`}>Fotos</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/admin/prendas/${prenda.id}/editar`}>Editar prenda</Link>
+          </Button>
+        </div>
       </div>
 
       <dl className="grid grid-cols-1 gap-4 rounded-lg border border-border p-4 sm:grid-cols-2">

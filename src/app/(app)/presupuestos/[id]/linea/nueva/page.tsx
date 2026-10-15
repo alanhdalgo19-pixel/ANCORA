@@ -56,6 +56,7 @@ export default async function NuevaLineaPage({
       prendas={prendas}
       parametros={parametros}
       logosCliente={logosCliente}
+      esAdmin={rol === "admin"}
     />
   );
 }

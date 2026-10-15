@@ -211,3 +211,101 @@ describe("calcularLayoutMockup", () => {
     expect(estrecho.svg_ancho_px).toBeCloseTo(90, 10);
   });
 });
+
+// ---------------------------------------------------------------------------
+// F2.4 — modo foto real
+// ---------------------------------------------------------------------------
+
+const FOTO_POLO = { url: "/api/prendas-fotos/foto-polo-color", ancho_px: 800, alto_px: 1000 };
+
+describe("calcularLayoutMockup con foto real (F2.4)", () => {
+  it("usa la proporción de la foto y coloca el área con los porcentajes del tipo", () => {
+    const layout = calcularLayoutMockup(entrada({ foto: FOTO_POLO }));
+
+    expect(layout.modo).toBe("foto_real");
+    // 400 px de alto y la proporción 4:5 de la foto.
+    expect(layout.svg_alto_px).toBeCloseTo(400, 10);
+    expect(layout.svg_ancho_px).toBeCloseTo(320, 10);
+    expect(layout.foto).toEqual({ url: FOTO_POLO.url, ancho_px: 320, alto_px: 400 });
+
+    // Polo pecho: caja x 60 %, y 25 %, 18 % × 15 % de 320 × 400 px.
+    const caja = { x: 0.6 * 320, y: 0.25 * 400, ancho: 0.18 * 320, alto: 0.15 * 400 };
+    // El área de 28 × 18 cm se encaja en la caja conservando la proporción.
+    const escalaLogo = Math.min(caja.ancho / 28, caja.alto / 18);
+    expect(layout.escala_logo_px_por_cm).toBeCloseTo(escalaLogo, 10);
+
+    const area = areaDisponible(layout.area);
+    expect(area.y_px).toBeCloseTo(caja.y, 10);
+    expect(area.ancho_px).toBeCloseTo(28 * escalaLogo, 10);
+    expect(area.x_px + area.ancho_px / 2).toBeCloseTo(caja.x + caja.ancho / 2, 10);
+    expect(area.x_px).toBeGreaterThanOrEqual(caja.x - 1e-9);
+    expect(area.alto_px).toBeLessThanOrEqual(caja.alto + 1e-9);
+
+    // El logo se mide en cm con la escala del área y mantiene las reglas F2.2.
+    const logo = layout.logo!;
+    expect(logo.ancho_px).toBeCloseTo(9 * escalaLogo, 10);
+    expect(logo.alto_px).toBeCloseTo(4 * escalaLogo, 10);
+    expect(logo.x_px + logo.ancho_px / 2).toBeCloseTo(area.x_px + area.ancho_px / 2, 10);
+    expect(logo.y_px).toBeCloseTo(area.y_px + 2 * escalaLogo, 10);
+    expect(logo.excede_area).toBe(false);
+    // Sobre una prenda de color el logo se funde con la foto.
+    expect(logo.mezcla).toBe("multiply");
+    expect(layout.warnings).toEqual([]);
+  });
+
+  it("sin foto cae al rectángulo abstracto exactamente igual que en F2.2", () => {
+    const sinFoto = calcularLayoutMockup(entrada());
+    const fotoNula = calcularLayoutMockup(entrada({ foto: null }));
+    const fotoSinUrl = calcularLayoutMockup(entrada({ foto: { ...FOTO_POLO, url: "" } }));
+
+    for (const layout of [sinFoto, fotoNula, fotoSinUrl]) {
+      expect(layout.modo).toBe("rectangulo_abstracto");
+      expect(layout.foto).toBeNull();
+      expect(layout.escala_logo_px_por_cm).toBe(layout.escala_px_por_cm);
+      expect(layout.logo?.mezcla).toBe("normal");
+    }
+    expect(fotoNula).toEqual(sinFoto);
+    expect(fotoSinUrl).toEqual(sinFoto);
+  });
+
+  it("prenda oscura: logo plano (multiply lo haría desaparecer); excede igual que sin foto", () => {
+    const layout = calcularLayoutMockup(
+      entrada({
+        foto: FOTO_POLO,
+        color_prenda: "oscuro",
+        ubicacion: "espalda",
+        logo_ancho_cm: 40,
+        logo_alto_cm: 50,
+      }),
+    );
+
+    expect(layout.modo).toBe("foto_real");
+    expect(layout.vista).toBe("trasera");
+    expect(layout.logo?.mezcla).toBe("normal");
+    expect(layout.logo?.excede_area).toBe(true);
+    expect(layout.warnings.some((aviso) => aviso.startsWith(AVISO_EXCEDE_AREA))).toBe(true);
+  });
+
+  it("una ubicación que el tipo no admite sigue sin estar disponible con foto", () => {
+    const layout = calcularLayoutMockup(
+      entrada({ tipo_prenda: "delantal", ubicacion: "espalda", foto: FOTO_POLO }),
+    );
+    expect(layout.area.disponible).toBe(false);
+    expect(layout.logo).toBeNull();
+    expect(layout.warnings).toContain(AVISO_UBICACION_NO_DISPONIBLE);
+  });
+
+  it("foto sin dimensiones conocidas: usa la proporción de la prenda; en PDF manda el ancho", () => {
+    const layout = calcularLayoutMockup(
+      entrada({
+        foto: { url: "https://firmada/foto.jpg", ancho_px: null, alto_px: null },
+        unidad: "pt",
+        ancho_pt: 180,
+      }),
+    );
+    expect(layout.modo).toBe("foto_real");
+    expect(layout.svg_ancho_px).toBeCloseTo(180, 10);
+    // Polo abstracto: 50 × 70 cm.
+    expect(layout.svg_alto_px).toBeCloseTo(180 * (70 / 50), 10);
+  });
+});

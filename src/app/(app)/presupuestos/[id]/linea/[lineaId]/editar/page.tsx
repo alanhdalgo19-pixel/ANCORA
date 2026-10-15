@@ -107,6 +107,7 @@ export default async function EditarLineaPage({
       prendas={prendas}
       parametros={parametros}
       logosCliente={logosCliente}
+      esAdmin={rol === "admin"}
       lineaId={params.lineaId}
       valorInicial={valorInicial}
     />

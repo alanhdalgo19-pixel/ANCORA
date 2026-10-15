@@ -48,6 +48,8 @@ interface LineaWizardProps {
   parametros: ParametrosWizard;
   /** F2.3 — biblioteca de logos del cliente del presupuesto. */
   logosCliente: LogoWizard[];
+  /** F2.4 — solo admin ve el aviso "foto genérica" en el mockup. */
+  esAdmin?: boolean;
   /** Presente cuando se está editando una línea existente. */
   lineaId?: string;
   valorInicial?: DatosLineaWizard;
@@ -76,6 +78,7 @@ export function LineaWizard({
   prendas,
   parametros,
   logosCliente,
+  esAdmin = false,
   lineaId,
   valorInicial,
 }: LineaWizardProps) {
@@ -123,6 +126,8 @@ export function LineaWizard({
       : null;
   const tipoPrendaMockup = prendaElegida?.tipo_mockup ?? "otro";
   const colorPrendaMockup: ColorGrupo = prendaElegida ? colorGrupo : "blanco";
+  // F2.4 — foto real de esa prenda en ese color; sin ella, rectángulo.
+  const fotoMockup = prendaElegida?.fotos[colorGrupo] ?? null;
   const logoElegido = logos.find((logo) => logo.id === logoId) ?? null;
 
   function construirDatos(detallesFinales: DetallesTecnica): DatosLineaWizard {
@@ -428,6 +433,10 @@ export function LineaWizard({
                 colorPrenda={colorPrendaMockup}
                 logo={logoElegido}
                 logos={logosMockup}
+                foto={fotoMockup}
+                // Sin prenda del catálogo no puede haber foto: avisar de que
+                // "falta" sería falso.
+                mostrarBadgeFotoGenerica={esAdmin && prendaElegida !== null}
               />
             </div>
           </div>
