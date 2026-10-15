@@ -728,8 +728,8 @@ Fase 2 se descompone en 4 prompts incrementales para reducir riesgo y facilitar 
 |--------|-----------|--------|
 | **F2.1** | Infraestructura: biblioteca de logos por cliente + bucket Supabase Storage | ✅ Completado |
 | **F2.2** | Componente Mockup con SVG puro + pantalla de prueba `/mockup-test` | ✅ Completado |
-| **F2.3** | Integrar mockup en wizard (paso 4) + hub + preview HTML + PDF real | ⏳ Siguiente |
-| **F2.4** | Sustituir rectángulo abstracto por fotos reales de prendas por proveedor | ⏳ Pendiente |
+| **F2.3** | Integrar mockup en wizard (paso 4) + PDF real | ✅ Completado |
+| **F2.4** | Sustituir rectángulo abstracto por fotos reales de prendas por proveedor | ⏳ Siguiente |
 
 ### Usuarios sembrados en Supabase Auth y tabla `usuarios`
 
@@ -1429,4 +1429,91 @@ En la tabla de líneas del hub del presupuesto, cada línea con mockup podrá mo
 
 ---
 
-*Última actualización del documento: septiembre 2026 tras cierre de F2.2. **FASE 2 al 50%** (F2.1 + F2.2 completados). Siguiente: F2.3 integración wizard + PDF.*
+*Última actualización del documento: septiembre 2026 tras cierre de F2.2.*
+
+---
+
+### Prompt F2.3 — Integración del mockup en wizard + PDF
+
+Tercer prompt de Fase 2. El componente `<Mockup>` de F2.2 se enchufa dentro del flujo real de creación de presupuestos: aparece inline en el paso 4 del wizard mientras Sonia diseña la línea, y se incluye en el PDF que se descarga.
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- Añadir columna `tipo_mockup` a `prendas` + migración + script de relleno.
+- Rasterización con primitivos de `@react-pdf/renderer` (View, Text, Image), sin `sharp` ni dependencias.
+- Sin miniatura en el hub del presupuesto. El mockup solo aparece en el wizard y en el PDF.
+- Mockup inline en el paso 4 (layout 2 columnas), debounce 200 ms.
+- Selector de logo dentro del wizard con biblioteca del cliente + botón "+ Subir" para logo puntual.
+
+**Dos confirmaciones adicionales de Claude Code al arrancar el prompt (antes de construir):**
+- **Rotable NO se gira en el mockup** (confirmado con Alan): `rotable` significa que se puede girar EN EL ROLLO para cortar menos film, pero en la prenda se estampa en su orientación original (Prompt 8, decisión 3). Siempre se guarda `rotado: false` en el snapshot del mockup.
+- **Serigrafía, impresión directa y sublimación no tienen medidas de logo** (el precio no depende del tamaño). Se añadieron campos opcionales "Ancho/Alto (opcional)" solo para el mockup; si Sonia no los pone, el mockup pinta la prenda sin logo colocado.
+
+**Decisiones técnicas de implementación (tomadas por Claude Code):**
+
+1. **El logo "rotable" no se gira en el mockup.** Se guarda siempre `rotado: false` (confirmado con Alan antes de construir). Rotable es para el rollo DTF, no para la prenda.
+
+2. **Medidas opcionales en serigrafía, impresión directa y sublimación** (confirmado con Alan). Son "Ancho/Alto (opcional)" y no tocan el precio. Se guardan en las columnas `ancho_logo_cm` / `alto_logo_cm` de la línea. Hay un test que lo verifica.
+
+3. **El layout de dos columnas vive en `LineaWizard`**, no repetido en los 5 formularios. Cada formulario avisa de sus medidas con el hook `useCambioMockup` (`src/hooks/`). Evita duplicar lógica.
+
+4. **El snapshot `mockup` guarda también el nombre y el formato del logo.** Así, si el logo se borra de la biblioteca después, el PDF todavía puede rotularlo con el nombre original.
+
+5. **Solo se incrustan PNG y JPG en el PDF.** `Image` de `@react-pdf/renderer` tampoco admite SVG. Los logos SVG y PDF salen como caja punteada con el nombre debajo.
+
+6. **`subirLogoPuntual` recibe `presupuesto_id` y de ahí saca el cliente.** Nunca marca el logo como principal, ni siquiera si es el primero. Además, el cálculo rechaza un logo que no sea del cliente del presupuesto. Defensa en profundidad.
+
+7. **El núcleo de la subida se extrajo a `src/lib/logos/registrar.ts`.** Lo comparten `subirLogo` (F2.1, mismo comportamiento que antes) y `subirLogoPuntual`, y así se puede testear sin Supabase.
+
+8. **La acción nueva está en `presupuestos/[id]/linea/actions.ts`**, como pedía el prompt. El resto de acciones del wizard siguen en `presupuestos/actions.ts`.
+
+9. **`calcularLayoutMockup` acepta `unidad: "px" | "pt"`.** En "pt" la escala sale del ancho (180 pt) y no del alto. Los campos siguen llamándose `*_px` para no romper F2.2 (compatibilidad hacia atrás).
+
+10. **Hay una opción "Sin logo" en el selector.** Al reeditar, una línea antigua sin logo guardado sugiere el principal del cliente, pero si se guardó "Sin logo" a propósito se respeta.
+
+11. **Sin prenda del catálogo, el mockup pinta una prenda genérica ("otro") en blanco.** Robustez cuando el usuario elige "cliente aporta la prenda" o similares.
+
+12. **La preview HTML y el hub NO llevan mockup** (decisión 3 del prompt). La tabla del estado del CLAUDE.md mencionaba "hub + preview HTML" — se corrige: el mockup solo aparece en el wizard (paso 4) y en el PDF descargable.
+
+13. **El tipo de mockup solo se edita desde el listado de `/admin/prendas`.** El formulario de alta y edición de prendas no lo incluye, así que una prenda nueva sale como "otro" hasta que se le asigne tipo en el listado.
+
+**Dos pasos manuales ejecutados por Alan tras el commit:**
+1. Aplicada migración `20260924000000_prendas_tipo_mockup.sql` en Supabase SQL Editor ("Success. No rows returned").
+2. Ejecutado `node scripts/rellenar_tipo_mockup.mjs` que asignó tipo a 13 prendas: 3 polo, 3 camiseta, 6 sudadera, 1 otro (Chaqueta neopreno Antártida).
+
+**Validación visual real por Claude Code en el navegador como Sonia** (localhost): wizard carga, layout 2 columnas correcto, logo H10 preseleccionado, mockup 9×4 dibujado, cambio a espalda 40×50 pinta vista trasera con borde rojo y aviso "excede el área imprimible", "Ver logo 1/2" alterna entre logos de composición, dialog "+ Subir" abre y cierra sin errores, por debajo de 1024 px el mockup pasa debajo del formulario sin scroll horizontal.
+
+**Validación posterior por Alan en producción:** F2.3 verificado funcionando. Mockup inline en el paso 4 con logos de Doyle Náutica, cambio a espalda 40×50 muestra el borde rojo y el aviso "El logo excede el área imprimible (máx. 34 × 45 cm)" + error inline del formulario "El logo es demasiado ancho para el rollo: 40 cm no caben en un rollo de 35 cm".
+
+**Incidente de recuperación:** por un undo accidental tras el commit, los 37 archivos se restauraron al estado pre-F2.3. El commit `e88dfef` seguía intacto en el historial de Git local, así que se recuperó íntegramente con `git checkout e88dfef -- .` y después se verificó con 299/299 tests passing. Push subido a `origin/main`.
+
+**Commit:** `e88dfef` — F2.3 integrar mockup en wizard (inline) + PDF descargable (37 archivos, +3.039 líneas, -216).
+
+**Estado de tests:** 299/299 tests passing (286 previos + 13 nuevos).
+
+---
+
+## Notas críticas pendientes para F2.4
+
+Con F2.3 cerrado, Fase 2 está al 75%. El último prompt (F2.4) sustituye el rectángulo abstracto por fotos reales de prendas por proveedor.
+
+### 31. Origen de las fotos de prendas
+
+**Preguntas a decidir en F2.4:**
+- ¿Catálogos oficiales de proveedor (Roly, JHK, Fruit, Clique, Kariban) descargados a Supabase Storage?
+- ¿Fotos propias que suba Ancora de las prendas que tienen en tienda?
+- ¿Mix de ambos?
+
+**Preguntar a Espe/Mohamed:** ¿tienen biblioteca propia de fotos? ¿quieren que las descarguemos de los catálogos oficiales?
+
+### 32. Nuevo bucket y nueva tabla
+
+- Nuevo bucket `prendas-fotos` en Supabase Storage (público, lectura sin firma, todas las fotos las verá cualquier cliente).
+- Nueva tabla `prendas_fotos` con FK a `prendas.id` + color + URL + opcional `area_imprimible_px` (coordenadas donde ir el logo sobre esa foto específica).
+
+### 33. Blending del logo sobre la foto
+
+Para que el logo aparezca "estampado" (no "pegado"), hay que aplicar algún modo de mezcla CSS (`mix-blend-mode: multiply` o similar) para que respete sombras y arrugas de la prenda. En el PDF esto es más limitado — probablemente simple superposición alpha.
+
+---
+
+*Última actualización del documento: octubre 2026 tras cierre de F2.3. **FASE 2 al 75%** (F2.1 + F2.2 + F2.3 completados). Siguiente y último: F2.4 fotos reales de prendas.*
