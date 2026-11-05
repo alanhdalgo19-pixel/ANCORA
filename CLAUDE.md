@@ -1517,3 +1517,108 @@ Para que el logo aparezca "estampado" (no "pegado"), hay que aplicar algún modo
 ---
 
 *Última actualización del documento: octubre 2026 tras cierre de F2.3. **FASE 2 al 75%** (F2.1 + F2.2 + F2.3 completados). Siguiente y último: F2.4 fotos reales de prendas.*
+
+---
+
+### Prompt F2.4 — Fotos reales de prendas (último prompt de Fase 2)
+
+Cuarto y último prompt de Fase 2. Sustituye el rectángulo abstracto del mockup por fotos reales de prendas del catálogo del proveedor. **Cierra Fase 2 al 100%.**
+
+**Decisiones técnicas de arquitectura (confirmadas con Alan antes del prompt):**
+- Mix de fotos oficiales de proveedor + fotos propias de Ancora (el sistema no distingue origen).
+- 3 fotos por prenda (una por `color_grupo`: blanco / color / oscuro).
+- Coordenadas automáticas por `tipo_mockup` (no manuales por foto; si una queda mal, corrección manual en patch futuro).
+- Blend mode CSS `multiply` en HTML (navegador) + superposición alpha simple en PDF.
+- Fallback silencioso al rectángulo abstracto + badge pequeño "foto genérica" visible solo para admin.
+
+**Decisiones técnicas de implementación (tomadas por Claude Code):**
+
+1. **Espalda con la foto delantera + banda "VISTA TRASERA".** Hay 3 fotos por prenda (una por color), así que en la espalda se usa la misma foto con una banda casi opaca que pone "VISTA TRASERA". Para tener foto trasera de verdad haría falta añadir una columna `vista` (queda como nota pendiente 34).
+
+2. **Tamaño del logo sobre la foto.** El área en cm (por ejemplo, el pecho del polo de 28×18) se ajusta dentro del rectángulo en porcentaje sin deformar, y de ahí sale la escala del logo. **Con los valores iniciales, en polo y chaleco ese rectángulo es pequeño (18% de ancho), así que el logo saldrá a la MITAD de su tamaño real aproximadamente.** Habrá que ajustar las coordenadas de `areas-imprimibles-foto.ts` con la primera foto real.
+
+3. **`multiply` solo en prendas blancas o color.** Sobre una prenda oscura haría desaparecer el logo, así que ahí se pone encima sin mezclar.
+
+4. **WebP no sale en el PDF.** `@react-pdf/renderer` no admite WebP. En el wizard sí se ve, pero en el PDF esa prenda sale genérica. La pantalla de admin lo avisa.
+
+5. **Reemplazar actualiza la misma fila de la foto** en lugar de borrarla y crear otra. Así la prenda nunca se queda sin foto, aunque falle algo a mitad.
+
+6. **El snapshot guarda `prenda_id`.** El PDF de un borrador usa la foto actual (puede cambiar si admin la reemplaza). Los emitidos ya quedan archivados tal cual se generaron. Las líneas anteriores a F2.4 siguen saliendo con el rectángulo.
+
+7. **Fotos del wizard cargadas con el catálogo.** Al cambiar de color, el mockup cambia de foto al instante, sin esperar al servidor. Las fotos se sirven por `/api/prendas-fotos/{id}`, que pide un enlace temporal en cada carga.
+
+8. **Comprobación de admin dentro del registro de fotos.** Así se puede probar la regla "un operador recibe error" sin conectar a Supabase.
+
+9. **Lectura de medidas de WebP sin librerías**, cubriendo sus tres variantes internas (VP8, VP8L y VP8X).
+
+10. **Tipo genérico "otro" con espalda y manga.** Se añadieron rectángulos para esas dos zonas, para no perder ubicaciones que sin foto sí tenía.
+
+11. **Aviso "foto genérica" solo cuando hay prenda del catálogo.** Si el cliente aporta la prenda, nunca puede haber foto, así que el aviso no tiene sentido.
+
+**Fix de Claude Code sobre el prompt:** el SQL del enunciado ponía `color_grupo_enum`, pero ese tipo en la base de datos se llama `color_grupo`. Tal cual, la migración habría fallado. Corregido antes de aplicar.
+
+**Dos pasos manuales ejecutados por Alan tras el commit:**
+1. Aplicada migración `20261015000000_prendas_fotos.sql` en Supabase SQL Editor ("Success. No rows returned").
+2. Ejecutado `npm run setup:prendas-fotos` → bucket "prendas-fotos" creado (privado, 3 MB, image/png + image/jpeg + image/webp).
+
+**Validación visual real por Alan:** subida una foto PNG en "color" para Polo Star, línea DTF creada en un presupuesto de Doyle Náutica. **El mockup muestra la foto real del polo blanco con el logo H10 colocado sobre el pecho (área 15×15 cm marcada).** Cambio a color "oscuro" → fallback al rectángulo abstracto con badge "foto genérica" visible para admin. Sin errores en consola.
+
+**Observación detectada en la validación (nota pendiente 34):** Alan solicitó vistas separadas por posición (frontal + trasera + lateral) en lugar del truco de banda "VISTA TRASERA" sobre la foto delantera. Decisión tomada: cerrar F2.4 como está y dejar la mejora para patch futuro, para no multiplicar por 3 el trabajo manual de subir fotos (pasaría de 39 a 117 fotos para las 13 prendas top).
+
+**Push subido a `origin/main`:** commit `01045c6` seguido de `6870db9..01045c6 main -> main`.
+
+**Estado de tests:** 311/311 tests passing (299 previos + 12 nuevos).
+
+---
+
+## 🎉 FASE 2 COMPLETADA AL 100% 🎉
+
+**4 sesiones cerradas oficialmente:**
+
+| # | Sesión | Contenido |
+|---|--------|-----------|
+| 15 | Prompt F2.1 | Infraestructura: biblioteca de logos por cliente + bucket Storage |
+| 16 | Prompt F2.2 | Componente Mockup con SVG puro + pantalla de prueba `/mockup-test` |
+| 17 | Prompt F2.3 | Integrar mockup en wizard (paso 4) + PDF descargable |
+| 18 | Prompt F2.4 | Fotos reales de prendas sustituyen el rectángulo abstracto |
+
+**Métricas tras Fase 2:**
+- ~34.000 líneas de código
+- **311/311 tests passing**
+- 18 tablas de BD con RLS (antes 17 + `prendas_fotos`)
+- 2 buckets de Storage (`presupuestos-pdf`, `logos-clientes`, `prendas-fotos`)
+- Fotomontaje operativo: logo sobre foto real de la prenda, visible en wizard y PDF
+
+**El sistema está listo para uso real avanzado en Ancora Publicitat.** Lo que queda es carga de contenido (no código):
+- Subir fotos reales de las 13 prendas top (3 por prenda × 13 = 39 fotos). Alan las descarga de la web del proveedor o pide a Espe las que tenga.
+- Ajuste empírico de `areas-imprimibles-foto.ts` con las primeras fotos reales (los rectángulos actuales pueden sacar logos más pequeños de lo realista).
+- Precios de las 13 prendas top (Espe).
+- Tarifa sublimación completa (Espe).
+
+---
+
+## Notas pendientes añadidas tras Fase 2
+
+### 34. [NUEVO] Vistas separadas por posición en las fotos de prenda
+
+Durante la validación de F2.4, Alan observó que al cambiar la ubicación del logo a "espalda" o "manga" el sistema sigue usando la foto delantera con una banda semiopaca "VISTA TRASERA" encima, en lugar de mostrar la foto real de la espalda o la manga de la prenda.
+
+**Decisión tomada:** cerrar F2.4 como está para no multiplicar por 3 el trabajo manual de subir fotos (de 39 a 117 para 13 prendas top). Cuando Espe/Mohamed vean la demo, si piden las vistas separadas explícitamente, se abre un patch F2.4A.
+
+**Cambio requerido cuando se haga:**
+- Añadir columna `vista` a `prendas_fotos` con enum `frontal | trasera | lateral`.
+- Clave única pasaría de `(prenda_id, color_grupo, es_principal)` a `(prenda_id, color_grupo, vista, es_principal)`.
+- UI de `/admin/prendas/[id]/fotos` debe soportar 9 slots (3 vistas × 3 colores) en lugar de 3.
+- Si Espe tiene fotos solo de frontal, el sistema cae al truco de la banda para trasera y manga (igual que ahora).
+
+### 35. [NUEVO] Ajuste empírico de áreas imprimibles de fotos
+
+Con el primer test real, Alan observa que **el logo sale a la MITAD de su tamaño real aproximadamente** sobre la foto del polo (ejemplo: 15×15 cm declarado se ve como ~8×8 cm en la foto). Esto es porque las coordenadas iniciales de `areas-imprimibles-foto.ts` asignan al pecho del polo un rectángulo de solo 18% de ancho de la foto.
+
+**Acción pendiente:** cuando Ancora empiece a subir fotos reales de las 13 prendas top, ir ajustando las coordenadas porcentuales en `areas-imprimibles-foto.ts` por tipo de prenda para que el logo salga al tamaño visualmente correcto.
+
+Es un ajuste empírico (prueba y error con la primera foto de cada tipo). No hace falta migración SQL, solo editar constantes.
+
+---
+
+*Última actualización del documento: noviembre 2026 tras cierre de F2.4. **FASE 1 + FASE 2 COMPLETADAS AL 100%.** El sistema está operativo de punta a punta, con fotomontaje real sobre prendas del catálogo. Siguiente: Fase 3 (inventario y reestructuración), cuando Alan/Ancora decidan arrancarla.*
